@@ -497,3 +497,55 @@ main { min-width:0; padding:22px 20px 20px; }
   .objective-row { grid-template-columns:1fr 1fr; }
   .window-title { display:none; }
 }
+
+
+/* --- Real-time Three.js traffic simulation --- */
+.city-lab-3d {
+  background:#06131d;
+  isolation:isolate;
+}
+.traffic-3d-root {
+  position:absolute;
+  inset:0;
+  z-index:1;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 54% 20%,rgba(52,127,165,.12),transparent 30%),
+    #07141e;
+}
+.traffic-3d-root canvas {
+  display:block;
+  width:100% !important;
+  height:100% !important;
+  outline:none;
+}
+.traffic-3d-label {
+  position:absolute;
+  left:14px;
+  bottom:13px;
+  z-index:7;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 9px;
+  border:1px solid rgba(48,183,209,.22);
+  border-radius:7px;
+  background:rgba(3,16,24,.76);
+  backdrop-filter:blur(10px);
+  pointer-events:none;
+}
+.traffic-3d-label span {
+  color:#20e4da;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+.traffic-3d-label strong {
+  color:#7f9ca9;
+  font-size:7px;
+  font-weight:600;
+}
+.city-lab-3d .telemetry-overlay,
+.city-lab-3d .plant-virtual {
+  z-index:12;
+}
