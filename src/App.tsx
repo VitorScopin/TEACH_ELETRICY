@@ -2,20 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   AlertTriangle,
+  BarChart3,
   BookOpen,
+  Building2,
   Cable,
   Check,
-  CheckCircle2,
   ChevronRight,
   CircleDot,
   Clock3,
   Cpu,
+  FlaskConical,
+  FolderOpen,
   Gauge,
   GraduationCap,
   Lightbulb,
   Network,
   Pause,
   Play,
+  PlugZap,
   Radio,
   RotateCcw,
   Settings2,
@@ -29,6 +33,7 @@ import { getActiveLights, validateTrafficState } from './lib/trafficValidator'
 import type { PlcConfig, TrafficState } from './types'
 
 type Mode = 'simulation' | 'plc'
+type TrafficKey = 'red' | 'yellow' | 'green'
 
 const defaultConfig: PlcConfig = {
   ...trafficLightProject.defaultConnection,
@@ -37,11 +42,19 @@ const defaultConfig: PlcConfig = {
   ) as PlcConfig['tags'],
 }
 
-const lightToState = (key: 'red' | 'yellow' | 'green'): TrafficState => ({
+const lightToState = (key: TrafficKey): TrafficState => ({
   red: key === 'red',
   yellow: key === 'yellow',
   green: key === 'green',
 })
+
+const stateLabel: Record<string, string> = {
+  red: 'VERMELHO',
+  yellow: 'AMARELO',
+  green: 'VERDE',
+  fault: 'FALHA',
+  off: 'DESLIGADO',
+}
 
 function App() {
   const [mode, setMode] = useState<Mode>('simulation')
@@ -57,37 +70,31 @@ function App() {
   const [timingPass, setTimingPass] = useState(() => new Set<string>())
   const [sequenceFault, setSequenceFault] = useState(false)
   const previousState = useRef('')
-  const lastPhase = useRef<'red' | 'yellow' | 'green' | null>(null)
+  const lastPhase = useRef<TrafficKey | null>(null)
   const phaseStartedAtRef = useRef(Date.now())
-
   const steps = trafficLightProject.sequence
 
   useEffect(() => {
     if (mode !== 'simulation' || !running) return
-
     const current = steps[phase]
     setTraffic(lightToState(current.key))
-
     const timer = window.setTimeout(() => {
       setPhase((value) => (value + 1) % steps.length)
     }, current.durationMs)
-
     return () => window.clearTimeout(timer)
   }, [mode, phase, running, steps])
 
   useEffect(() => {
     if (mode !== 'plc' || !connected) return
-
     const poll = async () => {
       const result = await window.teachElectrify?.plc.readTraffic()
       if (result?.ok && result.values) {
         setTraffic(result.values)
-        setConnectionMessage('Leitura online • ciclo de 250 ms')
+        setConnectionMessage('PLC Siemens conectado')
       } else if (result) {
         setConnectionMessage(result.message || 'Falha na leitura do PLC')
       }
     }
-
     poll()
     const timer = window.setInterval(poll, trafficLightProject.scanMs)
     return () => window.clearInterval(timer)
@@ -110,11 +117,7 @@ function App() {
       const elapsedMs = now - phaseStartedAtRef.current
       const expected = steps.find((step) => step.key === previousKey)
       if (expected && Math.abs(elapsedMs - expected.durationMs) <= 850) {
-        setTimingPass((current) => {
-          const next = new Set(current)
-          next.add(previousKey)
-          return next
-        })
+        setTimingPass((current) => new Set(current).add(previousKey))
       }
 
       const previousIndex = steps.findIndex((step) => step.key === previousKey)
@@ -127,18 +130,12 @@ function App() {
 
     if (currentKey) {
       lastPhase.current = currentKey
-      setSeenStates((current) => {
-        const next = new Set(current)
-        next.add(currentKey)
-        return next
-      })
+      setSeenStates((current) => new Set(current).add(currentKey))
     }
   }, [traffic, activeLights, steps])
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setPhaseElapsed((Date.now() - phaseStartedAt) / 1000)
-    }, 100)
+    const timer = window.setInterval(() => setPhaseElapsed((Date.now() - phaseStartedAt) / 1000), 100)
     return () => window.clearInterval(timer)
   }, [phaseStartedAt])
 
@@ -147,10 +144,7 @@ function App() {
   const sequencePass = seenStates.size >= 2 && !sequenceFault
   const score = Math.min(
     100,
-    (safeNow ? 20 : 0) +
-      seenStates.size * 10 +
-      timingPass.size * 10 +
-      (sequencePass ? 20 : 0),
+    (safeNow ? 20 : 0) + seenStates.size * 10 + timingPass.size * 10 + (sequencePass ? 20 : 0),
   )
 
   const connect = async () => {
@@ -184,272 +178,288 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark"><Zap size={21} /></div>
-          <div>
-            <strong>TEACH</strong>
-            <span>ELETRICY</span>
-          </div>
-        </div>
+    <div className="desktop-frame">
+      <div className="window-strip">
+        <div className="window-dots"><i /><i /><i /></div>
+        <div className="window-title">TEACH ELETRICY • INDUSTRIAL LEARNING LAB</div>
+        <div className="window-actions"><span>—</span><span>□</span><span>×</span></div>
+      </div>
 
-        <div className="course-label">AUTOMAÇÃO INDUSTRIAL</div>
-        <nav>
-          <button className="nav-item active"><Gauge size={18} /> Laboratório</button>
-          <button className="nav-item"><BookOpen size={18} /> Biblioteca de projetos</button>
-          <button className="nav-item"><GraduationCap size={18} /> Trilha de estudo</button>
-          <button className="nav-item"><Network size={18} /> Conexões PLC</button>
-        </nav>
-
-        <div className="sidebar-card">
-          <div className="eyebrow">PROGRESSO DA TRILHA</div>
-          <div className="progress-row">
-            <strong>Projeto 01</strong>
-            <span>1/12</span>
-          </div>
-          <div className="progress"><span /></div>
-          <small>{trafficLightProject.subtitle}</small>
-        </div>
-
-        <div className="sidebar-footer">
-          <CircleDot size={14} />
-          <span>Industrial Learning Lab</span>
-        </div>
-      </aside>
-
-      <main>
-        <header className="topbar">
-          <div>
-            <div className="breadcrumb">Projetos <ChevronRight size={14} /> Fundamentos <ChevronRight size={14} /> Projeto 01</div>
-            <div className="title-line">
-              <h1>Semáforo <span>Inteligente</span></h1>
-              <div className="difficulty">INICIANTE</div>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="brand">
+            <div className="brand-mark"><Zap size={27} /></div>
+            <div>
+              <strong>TEACH ELETRICY</strong>
+              <span>AUTOMAÇÃO INDUSTRIAL</span>
             </div>
-            <p>Construa a lógica no TIA Portal e valide o comportamento do PLC em uma planta virtual.</p>
           </div>
-          <div className="top-actions">
-            <div className={connected ? 'status online' : 'status'}>
-              <Radio size={15} />
-              {connected ? 'PLC ONLINE' : mode === 'simulation' ? 'SIMULAÇÃO ATIVA' : 'OFFLINE'}
+
+          <nav>
+            <button className="nav-item active"><FlaskConical size={19} /><span>Laboratório</span></button>
+            <button className="nav-item"><FolderOpen size={19} /><span>Biblioteca de projetos</span></button>
+            <button className="nav-item"><BookOpen size={19} /><span>Trilha de estudo</span></button>
+            <button className="nav-item"><Cpu size={19} /><span>Conexões PLC</span></button>
+          </nav>
+
+          <div className="sidebar-progress">
+            <div className="progress-head">
+              <BarChart3 size={17} />
+              <strong>Projeto 01</strong>
+              <span>1/12</span>
             </div>
-            <button className="icon-button" onClick={resetLab} title="Reiniciar laboratório"><RotateCcw size={16} /></button>
+            <div className="progress"><span /></div>
           </div>
-        </header>
 
-        <section className="mission-strip">
-          <div><Sparkles size={16} /><span>MISSÃO</span><strong>Crie um ciclo seguro com 3 estados</strong></div>
-          <div><Clock3 size={15} /><span>TEMPO ESTIMADO</span><strong>{trafficLightProject.estimatedMinutes} min</strong></div>
-          <div><ShieldCheck size={15} /><span>REGRA CRÍTICA</span><strong>1 saída ativa por vez</strong></div>
-          <div className="score-box"><span>VALIDAÇÃO</span><strong>{score}%</strong></div>
-        </section>
+          <div className="industrial-art" aria-hidden="true">
+            <div className="tower t1" /><div className="tower t2" /><div className="tower t3" />
+            <div className="pipe p1" /><div className="pipe p2" /><div className="pipe p3" />
+            <div className="plant-glow" />
+          </div>
 
-        <section className="workspace-grid">
-          <div className="simulation-card panel">
-            <div className="panel-head">
-              <div>
-                <div className="eyebrow">DIGITAL TWIN LAB</div>
-                <h2>Via urbana virtual</h2>
+          <div className="sidebar-motto">
+            <span>APRENDER</span><span>SIMULAR</span><span>CONECTAR</span><span>EVOLUIR</span><i />
+          </div>
+        </aside>
+
+        <main>
+          <header className="topbar">
+            <div className="header-copy">
+              <div className="breadcrumb">
+                <span className="home-dot">⌂</span><ChevronRight size={13} />
+                Projetos <ChevronRight size={13} /> Fundamentos <ChevronRight size={13} /> Projeto 01
               </div>
-              <div className="sim-actions">
-                <button
-                  className={mode === 'simulation' ? 'chip active' : 'chip'}
-                  onClick={() => {
-                    setMode('simulation')
-                    setConnected(false)
-                    setConnectionMessage('Ambiente virtual pronto')
-                  }}
-                >
-                  Simulação
-                </button>
-                <button className={mode === 'plc' ? 'chip active' : 'chip'} onClick={() => setMode('plc')}>
-                  PLC Siemens
-                </button>
+              <div className="title-line">
+                <h1>Semáforo Inteligente</h1>
+                <div className="difficulty">INICIANTE</div>
               </div>
+              <p>Construa a lógica no <b>TIA Portal</b> e valide o funcionamento em uma planta virtual realista.</p>
             </div>
 
-            <div className={`road-scene light-${activeLight}`}>
-              <div className="scene-grid" />
-              <div className="city-silhouette">
-                {Array.from({ length: 15 }).map((_, i) => <i key={i} />)}
-              </div>
-              <div className="city-glow glow-a" />
-              <div className="city-glow glow-b" />
+            <div className="top-actions">
+              <button
+                className={mode === 'simulation' ? 'run-status active' : 'run-status'}
+                onClick={() => {
+                  setMode('simulation')
+                  setConnected(false)
+                  setConnectionMessage('Ambiente virtual pronto')
+                }}
+              >
+                <Play size={14} fill="currentColor" />
+                SIMULAÇÃO ATIVA
+              </button>
+              <button className="icon-button" onClick={resetLab} title="Reiniciar laboratório"><RotateCcw size={16} /></button>
+            </div>
+          </header>
 
-              <div className="scene-badge">
-                <span className={safeNow ? 'pulse online' : 'pulse fault'} />
-                {safeNow ? 'SISTEMA SEGURO' : 'CONDIÇÃO INVÁLIDA'}
-              </div>
+          <section className="mission-strip">
+            <div className="mission-item">
+              <div className="stat-icon blue"><Sparkles size={19} /></div>
+              <div><span>MISSÃO</span><strong>Crie um ciclo seguro com 3 estados</strong></div>
+            </div>
+            <div className="mission-item">
+              <div className="stat-icon blue"><Clock3 size={19} /></div>
+              <div><span>TEMPO ESTIMADO</span><strong>{trafficLightProject.estimatedMinutes} min</strong></div>
+            </div>
+            <div className="mission-item">
+              <div className="stat-icon red"><AlertTriangle size={19} /></div>
+              <div><span>REGRA CRÍTICA</span><strong>1 saída ativa por vez</strong></div>
+            </div>
+            <div className="mission-item score-card">
+              <div className="stat-icon cyan"><BarChart3 size={19} /></div>
+              <div><span>VALIDAÇÃO</span><strong>{score}%</strong></div>
+            </div>
+          </section>
 
-              <div className="road">
-                <div className="road-edge" />
-                <div className="lane-line line-one" />
-                <div className="lane-line line-two" />
-                <div className="crosswalk">
-                  {Array.from({ length: 7 }).map((_, i) => <i key={i} />)}
+          <section className="workspace-grid">
+            <section className="simulation-card panel">
+              <div className={`city-lab light-${activeLight}`}>
+                <div className="city-sky">
+                  <div className="sky-glow" />
+                  {Array.from({ length: 18 }).map((_, i) => <i key={i} className={`building b${(i % 6) + 1}`} />)}
                 </div>
 
-                <div className="traffic-pole">
-                  <div className="signal-cap" />
-                  <div className="traffic-box">
+                <div className="telemetry-overlay">
+                  <div><span>Estado Atual</span><strong><i className={`state-led ${activeLight}`} />{stateLabel[activeLight]}</strong></div>
+                  <div><span>Fonte</span><strong>{mode === 'plc' ? 'TIA Portal / PLC S7' : 'Simulador interno'}</strong></div>
+                  <div><span>Tempo fase</span><strong>{phaseElapsed.toFixed(1)} s / {(steps[phase]?.durationMs ?? 0) / 1000} s</strong></div>
+                  <div><span>Scan do PLC</span><strong>{mode === 'plc' ? '250 ms' : 'LOCAL'}</strong></div>
+                </div>
+
+                <div className="plant-virtual">
+                  <Building2 size={17} />
+                  <div><span>PLANTA VIRTUAL</span><strong>Interseção Urbana</strong></div>
+                  <ChevronRight size={14} className="rotate-90" />
+                </div>
+
+                <div className="scene-road road-horizontal">
+                  <div className="lane-stripe s1" /><div className="lane-stripe s2" />
+                </div>
+                <div className="scene-road road-vertical">
+                  <div className="lane-stripe s1" /><div className="lane-stripe s2" />
+                </div>
+                <div className="crosswalk cw-left">{Array.from({length:6}).map((_,i)=><i key={i}/>)}</div>
+                <div className="crosswalk cw-right">{Array.from({length:6}).map((_,i)=><i key={i}/>)}</div>
+
+                <div className="traffic-main">
+                  <div className="arm arm-left" /><div className="arm arm-right" />
+                  <div className="signal-head">
                     <span className={traffic.red ? 'lamp red on' : 'lamp red'} />
                     <span className={traffic.yellow ? 'lamp yellow on' : 'lamp yellow'} />
                     <span className={traffic.green ? 'lamp green on' : 'lamp green'} />
                   </div>
-                  <div className="pole" />
-                  <div className="pole-base" />
+                  <div className="signal-pole" />
+                  <div className="signal-base" />
                 </div>
 
-                <div className="car car-1"><span /><i /></div>
-                <div className="car car-2"><span /><i /></div>
-                <div className="car car-3"><span /><i /></div>
+                <div className="traffic-mini mini-a"><span className="mini-red on"/><span/><span className="mini-green"/></div>
+                <div className="traffic-mini mini-b"><span/><span/><span className="mini-green on"/></div>
+                <div className="traffic-mini mini-c"><span className="mini-red"/><span/><span className="mini-green on"/></div>
+
+                <div className="car suv"><span className="car-window"/><i/><b/></div>
+                <div className="car white"><span className="car-window"/><i/><b/></div>
+                <div className="car blue"><span className="car-window"/><i/><b/></div>
+
+                <div className="road-reflection r-red" />
+                <div className="road-reflection r-green" />
+                <div className="scene-vignette" />
               </div>
 
-              <div className="telemetry">
-                <div><Activity size={15} /><span>Estado</span><strong>{activeLight.toUpperCase()}</strong></div>
-                <div><Cpu size={15} /><span>Fonte</span><strong>{mode === 'plc' ? 'SIEMENS S7' : 'VIRTUAL'}</strong></div>
-                <div><Clock3 size={15} /><span>Tempo fase</span><strong>{phaseElapsed.toFixed(1)} s</strong></div>
-                <div><Gauge size={15} /><span>Scan</span><strong>{mode === 'plc' ? '250 ms' : 'LOCAL'}</strong></div>
-              </div>
-            </div>
-
-            <div className="simulation-footer">
-              <div className="phase-dots">
-                {steps.map((step, index) => {
-                  const isSeen = seenStates.has(step.key)
-                  return (
+              <div className="phase-control">
+                <div className="phase-title">
+                  <strong>CONTROLE DAS FASES</strong>
+                  <span>Ajuste os tempos para testar sua lógica</span>
+                </div>
+                <div className="phase-row">
+                  {steps.map((step, index) => (
                     <button
                       key={step.key}
-                      className={mode === 'simulation' && phase === index ? 'phase active' : 'phase'}
+                      className={`phase-card ${step.key} ${mode === 'simulation' && phase === index ? 'active' : ''}`}
                       onClick={() => {
                         setMode('simulation')
                         setPhase(index)
                         setTraffic(lightToState(step.key))
                       }}
                     >
-                      <span>{isSeen ? <Check size={12} /> : index + 1}</span>
-                      <div><strong>{step.label}</strong><small>{step.durationMs / 1000}s • {config.tags[step.key]}</small></div>
+                      <i className={`phase-lamp ${step.key}`} />
+                      <div><span>{step.label}</span><strong>{step.durationMs / 1000} segundos</strong></div>
+                      <div className="phase-arrows"><span>⌃</span><span>⌄</span></div>
                     </button>
-                  )
-                })}
-              </div>
-              <button className="primary" onClick={() => setRunning((value) => !value)}>
-                {running ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-                {running ? 'Pausar ciclo' : 'Executar ciclo'}
-              </button>
-            </div>
-          </div>
-
-          <div className="right-column">
-            <div className="panel validation-card">
-              <div className="panel-head compact">
-                <div>
-                  <div className="eyebrow">LIVE VALIDATOR</div>
-                  <h2>Validação da lógica</h2>
+                  ))}
+                  <button className="execute-button" onClick={() => setRunning((v) => !v)}>
+                    {running ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+                    {running ? 'Pausar ciclo' : 'Executar ciclo'}
+                  </button>
                 </div>
-                <div className={safeNow ? 'validator-score pass' : 'validator-score fail'}>{score}</div>
               </div>
+            </section>
 
-              <div className="validation-list">
-                {validations.map((item) => (
-                  <div className={`validation-item ${item.status}`} key={item.id}>
-                    <div className="validation-icon">
-                      {item.status === 'pass' ? <Check size={14} /> : item.status === 'fail' ? <AlertTriangle size={14} /> : <CircleDot size={12} />}
+            <aside className="right-column">
+              <section className="panel validation-card">
+                <div className="panel-kicker"><FlaskConical size={16} /><span>LIVE VALIDATOR</span></div>
+                <div className="validator-header">
+                  <h2>Validação da lógica</h2>
+                  <div className="score-ring" style={{'--score': `${score * 3.6}deg`} as React.CSSProperties}>
+                    <div>{score}<small>%</small></div>
+                  </div>
+                </div>
+
+                <div className="validation-list">
+                  {validations.map((item) => (
+                    <div className={`validation-item ${item.status}`} key={item.id}>
+                      <div className="validation-icon">
+                        {item.status === 'pass' ? <Check size={13} /> : item.status === 'fail' ? <AlertTriangle size={13} /> : <CircleDot size={11} />}
+                      </div>
+                      <strong>{item.title}</strong>
+                      <span>{item.status === 'pass' ? 'OK' : item.status === 'fail' ? 'ERRO' : '...'}</span>
                     </div>
-                    <div><strong>{item.title}</strong><small>{item.detail}</small></div>
+                  ))}
+                  <div className={`validation-item ${sequenceFault ? 'fail' : sequencePass ? 'pass' : 'waiting'}`}>
+                    <div className="validation-icon">{sequenceFault ? <AlertTriangle size={13} /> : sequencePass ? <Check size={13} /> : <CircleDot size={11} />}</div>
+                    <strong>Ordem da sequência</strong><span>{sequenceFault ? 'ERRO' : sequencePass ? 'OK' : '...'}</span>
+                  </div>
+                  <div className={`validation-item ${timingPass.size === 3 ? 'pass' : 'waiting'}`}>
+                    <div className="validation-icon">{timingPass.size === 3 ? <Check size={13} /> : <Clock3 size={11} />}</div>
+                    <strong>Temporização das fases</strong><span>{timingPass.size === 3 ? 'OK' : '...'}</span>
+                  </div>
+                  <div className={`validation-item ${allPhasesSeen ? 'pass' : 'waiting'}`}>
+                    <div className="validation-icon">{allPhasesSeen ? <Check size={13} /> : <CircleDot size={11} />}</div>
+                    <strong>Ciclo completo observado</strong><span>{allPhasesSeen ? 'OK' : 'AGUARDANDO'}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className="panel connection-card">
+                <div className="connection-top">
+                  <div className="panel-kicker"><Cpu size={16} /><span>CONEXÃO INDUSTRIAL</span></div>
+                  <div className={connected ? 'plc-status online' : 'plc-status'}><i />{connected ? 'PLC ONLINE' : 'OFFLINE'}</div>
+                </div>
+                <h2>Siemens S7</h2>
+
+                <div className="connection-fields">
+                  <label className="ip-field">Endereço IP<input value={config.host} onChange={(e) => setConfig({...config,host:e.target.value})}/></label>
+                  <label>Rack<input type="number" value={config.rack} onChange={(e)=>setConfig({...config,rack:Number(e.target.value)})}/></label>
+                  <label>Slot<input type="number" value={config.slot} onChange={(e)=>setConfig({...config,slot:Number(e.target.value)})}/></label>
+                </div>
+
+                <div className="tag-heading">Tags de saída (Q)</div>
+                <div className="tag-list">
+                  {trafficLightProject.tags.map(tag=>(
+                    <label key={tag.key}>
+                      <i className={`tag-dot ${tag.key}`}/>
+                      <span>{tag.label}</span>
+                      <input value={config.tags[tag.key]} onChange={(e)=>setConfig({...config,tags:{...config.tags,[tag.key]:e.target.value}})}/>
+                    </label>
+                  ))}
+                </div>
+
+                <div className={connected ? 'connection-health online' : 'connection-health'}>
+                  <ShieldCheck size={16}/><span>{connectionMessage}</span>
+                </div>
+
+                <div className="connection-actions">
+                  <button className={connected ? 'connect-button danger' : 'connect-button'} onClick={connected ? disconnect : connect}>
+                    {connected ? <Unplug size={16}/> : <PlugZap size={16}/>}
+                    {connected ? 'Desconectar PLC' : 'Conectar ao PLC'}
+                  </button>
+                  <button className="settings-button"><Settings2 size={17}/></button>
+                </div>
+              </section>
+            </aside>
+          </section>
+
+          <section className="bottom-grid">
+            <section className="panel mission-bottom">
+              <div className="bottom-heading">
+                <div className="mini-icon cyan"><Network size={16}/></div>
+                <div><span>MISSÃO DO PROJETO</span><p>Implemente um semáforo de 3 estados com temporização e ciclo contínuo.</p></div>
+              </div>
+              <div className="objective-row">
+                {steps.map(step=>(
+                  <div className="objective-card" key={step.key}>
+                    <i className={`phase-lamp ${step.key}`}/>
+                    <div><span>{step.label}</span><strong>{step.durationMs/1000} segundos</strong><small>{step.key==='red'?'Via principal fechada':step.key==='green'?'Via principal liberada':'Transição de segurança'}</small></div>
                   </div>
                 ))}
-                <div className={`validation-item ${sequenceFault ? 'fail' : sequencePass ? 'pass' : 'waiting'}`}>
-                  <div className="validation-icon">{sequenceFault ? <AlertTriangle size={14} /> : sequencePass ? <Check size={14} /> : <CircleDot size={12} />}</div>
-                  <div><strong>Ordem da sequência</strong><small>{sequenceFault ? 'Foi detectada uma transição fora da ordem vermelho → verde → amarelo.' : sequencePass ? 'Transições observadas na ordem esperada.' : 'Aguardando a próxima transição.'}</small></div>
-                </div>
-                <div className={`validation-item ${timingPass.size === 3 ? 'pass' : 'waiting'}`}>
-                  <div className="validation-icon">{timingPass.size === 3 ? <Check size={14} /> : <Clock3 size={12} />}</div>
-                  <div><strong>Temporização das fases</strong><small>{timingPass.size === 3 ? '5 s / 6 s / 2 s validados dentro da tolerância.' : `${timingPass.size}/3 temporizações validadas.`}</small></div>
-                </div>
-                <div className={`validation-item ${allPhasesSeen ? 'pass' : 'waiting'}`}>
-                  <div className="validation-icon">{allPhasesSeen ? <Check size={14} /> : <CircleDot size={12} />}</div>
-                  <div><strong>Ciclo completo observado</strong><small>{allPhasesSeen ? 'As três fases foram detectadas.' : `${seenStates.size}/3 fases identificadas.`}</small></div>
+                <div className="objective-card">
+                  <RotateCcw size={20}/>
+                  <div><span>Ciclo contínuo</span><strong>Automático</strong><small>Repete automaticamente a sequência</small></div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div className="panel connection-card">
-              <div className="panel-head compact">
-                <div>
-                  <div className="eyebrow">CONEXÃO INDUSTRIAL</div>
-                  <h2>Siemens S7</h2>
-                </div>
-                <Cable size={21} />
-              </div>
-
-              <label>
-                Endereço IP
-                <input value={config.host} onChange={(e) => setConfig({ ...config, host: e.target.value })} />
-              </label>
-
-              <div className="input-row">
-                <label>Rack<input type="number" value={config.rack} onChange={(e) => setConfig({ ...config, rack: Number(e.target.value) })} /></label>
-                <label>Slot<input type="number" value={config.slot} onChange={(e) => setConfig({ ...config, slot: Number(e.target.value) })} /></label>
-              </div>
-
-              <div className="tag-grid">
-                {trafficLightProject.tags.map((tag) => (
-                  <label key={tag.key}>
-                    <span className={`tag-dot ${tag.key}`} />
-                    {tag.label}
-                    <input
-                      value={config.tags[tag.key]}
-                      onChange={(e) => setConfig({ ...config, tags: { ...config.tags, [tag.key]: e.target.value } })}
-                    />
-                  </label>
-                ))}
-              </div>
-
-              <div className="connection-state">
-                <span className={connected ? 'pulse online' : 'pulse'} />
-                <div><strong>{connectionMessage}</strong><small>ISO-on-TCP • TCP 102 • leitura somente</small></div>
-              </div>
-
-              <button className={connected ? 'secondary danger' : 'secondary'} onClick={connected ? disconnect : connect}>
-                {connected ? <Unplug size={17} /> : <Cable size={17} />}
-                {connected ? 'Desconectar' : 'Conectar ao PLC'}
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="bottom-grid">
-          <div className="panel lesson-card expanded">
-            <div>
-              <div className="eyebrow">MISSÃO DO PROJETO</div>
-              <h3>Implemente a sequência no TIA Portal</h3>
-              <p>Use uma máquina de estados. O TEACH ELETRICY observa o PLC e valida o comportamento sem precisar conhecer como você escreveu o programa.</p>
-            </div>
-            <div className="objective-grid">
-              {steps.map((step) => (
-                <div key={step.key}>
-                  <span className={`objective-light ${step.key}`} />
-                  <div><strong>{step.label}</strong><small>{step.durationMs / 1000} segundos</small></div>
-                </div>
-              ))}
+            <section className="panel engineering-tip">
+              <div className="tip-icon"><Lightbulb size={19}/></div>
               <div>
-                <Settings2 size={17} />
-                <div><strong>Ciclo contínuo</strong><small>Sem estados conflitantes</small></div>
+                <span>DICA DE ENGENHARIA</span>
+                <h3>Pense em estados, não em lâmpadas.</h3>
+                <p>Modele o problema como uma máquina de estados (FSM). Em cada estado, defina o tempo, a condição de transição e quais saídas devem estar ativas.</p>
               </div>
-            </div>
-          </div>
-
-          <div className="panel hint-panel premium-hint">
-            <div className="hint-icon"><Lightbulb size={20} /></div>
-            <div>
-              <div className="eyebrow">DICA DE ENGENHARIA</div>
-              <strong>Pense em estados, não em lâmpadas.</strong>
-              <p>Crie os estados VERMELHO → VERDE → AMARELO e derive as saídas a partir do estado atual. Isso reduz conflitos e deixa o programa mais fácil de diagnosticar.</p>
-            </div>
-          </div>
-        </section>
-      </main>
+              <div className="brain-orb"><Cpu size={30}/></div>
+            </section>
+          </section>
+        </main>
+      </div>
     </div>
   )
 }
