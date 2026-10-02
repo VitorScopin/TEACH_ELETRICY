@@ -316,9 +316,45 @@ function App() {
                 <div className="traffic-mini mini-b"><span/><span/><span className="mini-green on"/></div>
                 <div className="traffic-mini mini-c"><span className="mini-red"/><span/><span className="mini-green on"/></div>
 
-                <div className="car suv"><span className="car-window"/><i/><b/></div>
-                <div className="car white"><span className="car-window"/><i/><b/></div>
-                <div className="car blue"><span className="car-window"/><i/><b/></div>
+                <div className="vehicle vehicle-suv">
+                  <div className="vehicle-shadow" />
+                  <div className="vehicle-body">
+                    <div className="vehicle-hood" />
+                    <div className="vehicle-cabin">
+                      <span className="glass front" />
+                      <span className="glass side" />
+                    </div>
+                    <span className="headlight left" /><span className="headlight right" />
+                    <span className="taillight left" /><span className="taillight right" />
+                    <div className="wheel front"><i /></div><div className="wheel rear"><i /></div>
+                  </div>
+                </div>
+                <div className="vehicle vehicle-hatch">
+                  <div className="vehicle-shadow" />
+                  <div className="vehicle-body">
+                    <div className="vehicle-hood" />
+                    <div className="vehicle-cabin">
+                      <span className="glass front" />
+                      <span className="glass side" />
+                    </div>
+                    <span className="headlight left" /><span className="headlight right" />
+                    <span className="taillight left" /><span className="taillight right" />
+                    <div className="wheel front"><i /></div><div className="wheel rear"><i /></div>
+                  </div>
+                </div>
+                <div className="vehicle vehicle-sedan">
+                  <div className="vehicle-shadow" />
+                  <div className="vehicle-body">
+                    <div className="vehicle-hood" />
+                    <div className="vehicle-cabin">
+                      <span className="glass front" />
+                      <span className="glass side" />
+                    </div>
+                    <span className="headlight left" /><span className="headlight right" />
+                    <span className="taillight left" /><span className="taillight right" />
+                    <div className="wheel front"><i /></div><div className="wheel rear"><i /></div>
+                  </div>
+                </div>
 
                 <div className="road-reflection r-red" />
                 <div className="road-reflection r-green" />
