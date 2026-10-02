@@ -47,9 +47,9 @@ function CarModel({
   color: string
 }) {
   const dims = useMemo(() => {
-    if (kind === 'suv') return { length: 3.15, width: 1.55, bodyH: 0.62, cabinH: 0.7, cabinL: 1.55 }
-    if (kind === 'hatch') return { length: 2.65, width: 1.45, bodyH: 0.55, cabinH: 0.65, cabinL: 1.35 }
-    return { length: 2.95, width: 1.48, bodyH: 0.54, cabinH: 0.58, cabinL: 1.45 }
+    if (kind === 'suv') return { length: 3.0, width: 1.46, bodyH: 0.58, cabinH: 0.64, cabinL: 1.48 }
+    if (kind === 'hatch') return { length: 2.55, width: 1.38, bodyH: 0.52, cabinH: 0.58, cabinL: 1.28 }
+    return { length: 2.8, width: 1.4, bodyH: 0.52, cabinH: 0.54, cabinL: 1.36 }
   }, [kind])
 
   const wheelX = dims.length * 0.31
@@ -104,31 +104,38 @@ function CarModel({
 }
 
 function TrafficLight3D({ traffic }: { traffic: TrafficState }) {
-  const light = (on: boolean, color: string) => (
-    <mesh>
-      <sphereGeometry args={[0.18, 18, 18]} />
+  const light = (on: boolean, color: string, y: number) => (
+    <mesh position={[0, y, -0.19]}>
+      <sphereGeometry args={[0.105, 18, 18]} />
       <meshStandardMaterial
-        color={on ? color : '#14191d'}
+        color={on ? color : '#12181c'}
         emissive={on ? color : '#000000'}
-        emissiveIntensity={on ? 3.2 : 0}
-        roughness={0.25}
+        emissiveIntensity={on ? 2.8 : 0}
+        roughness={0.28}
       />
     </mesh>
   )
 
   return (
-    <group position={[-2.2, 0, -2.5]}>
-      <mesh castShadow position={[0, 2.3, 0]}>
-        <boxGeometry args={[0.15, 4.6, 0.15]} />
-        <meshStandardMaterial color="#4e5b63" metalness={0.72} roughness={0.3} />
+    <group position={[-5.9, 0, 3.65]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh castShadow position={[0, 1.45, 0]}>
+        <cylinderGeometry args={[0.055, 0.07, 2.9, 14]} />
+        <meshStandardMaterial color="#59666d" metalness={0.7} roughness={0.34} />
       </mesh>
-      <mesh castShadow position={[0, 4.55, 0]}>
-        <boxGeometry args={[0.8, 1.95, 0.62]} />
-        <meshStandardMaterial color="#080d11" metalness={0.2} roughness={0.6} />
+
+      <mesh castShadow position={[0, 2.9, 0]}>
+        <boxGeometry args={[0.42, 1.12, 0.38]} />
+        <meshStandardMaterial color="#080d11" metalness={0.18} roughness={0.62} />
       </mesh>
-      <group position={[0, 5.05, -0.33]}>{light(traffic.red, '#ff332f')}</group>
-      <group position={[0, 4.55, -0.33]}>{light(traffic.yellow, '#ffca3a')}</group>
-      <group position={[0, 4.05, -0.33]}>{light(traffic.green, '#35e879')}</group>
+
+      {light(traffic.red, '#ff332f', 3.23)}
+      {light(traffic.yellow, '#ffca3a', 2.90)}
+      {light(traffic.green, '#35e879', 2.57)}
+
+      <mesh castShadow position={[0, 0.08, 0]}>
+        <cylinderGeometry args={[0.14, 0.18, 0.16, 14]} />
+        <meshStandardMaterial color="#323d43" metalness={0.45} roughness={0.5} />
+      </mesh>
     </group>
   )
 }
@@ -300,7 +307,7 @@ function TrafficCars({
         x: spawnX,
         speed: 0,
         desiredSpeed: 4.6 + (id % 3) * 0.35,
-        length: kind === 'suv' ? 3.15 : kind === 'hatch' ? 2.65 : 2.95,
+        length: kind === 'suv' ? 3.0 : kind === 'hatch' ? 2.55 : 2.8,
       }
       carsRef.current = [...carsRef.current, car]
       setCars([...carsRef.current])
@@ -316,12 +323,12 @@ function TrafficCars({
       let targetX = Number.POSITIVE_INFINITY
 
       if (mustStopForSignal) {
-        targetX = stopLine - car.length * 0.5
+        targetX = stopLine - car.length * 0.36
       }
 
       if (ahead) {
-        const queueGap = Math.max(1.25, car.length * 0.38)
-        const behindAhead = ahead.x - ahead.length * 0.5 - queueGap - car.length * 0.5
+        const queueGap = Math.max(1.05, car.length * 0.34)
+        const behindAhead = ahead.x - ahead.length * 0.36 - queueGap - car.length * 0.36
         targetX = Math.min(targetX, behindAhead)
       }
 
@@ -367,8 +374,8 @@ function TrafficCars({
             if (node) refs.current.set(car.id, node)
             else refs.current.delete(car.id)
           }}
-          position={[car.x, 0.02, 2.05]}
-          scale={index % 2 === 0 ? 0.9 : 0.82}
+          position={[car.x, 0.02, 2.0]}
+          scale={0.72}
         >
           <CarModel kind={car.kind} color={car.color} />
         </group>
