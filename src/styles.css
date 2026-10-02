@@ -221,20 +221,158 @@ main { min-width:0; padding:22px 20px 20px; }
 .traffic-mini .mini-green.on { background:#20e16c; box-shadow:0 0 10px #20e16c; }
 .mini-a { left:31%; top:38%; } .mini-b { right:27%; top:38%; } .mini-c { right:16%; top:54%; }
 
-.car { position:absolute; z-index:17; width:112px; height:39px; border-radius:14px 18px 8px 8px; box-shadow:0 15px 16px rgba(0,0,0,.36); transition:transform 2s ease, left 2s ease, right 2s ease; }
-.car:before,.car:after { content:""; position:absolute; bottom:-7px; width:20px; height:20px; border-radius:50%; background:#06090b; border:4px solid #293740; }
-.car:before{left:18px}.car:after{right:18px}
-.car-window { position:absolute; right:18px; top:-8px; width:42px; height:16px; background:#173747; border-radius:10px 13px 3px 3px; transform:skewX(-15deg); }
-.car i,.car b { position:absolute; top:13px; width:8px; height:6px; border-radius:2px; }
-.car i { right:-2px; background:#fff3c1; box-shadow:0 0 11px rgba(255,243,193,.9); }
-.car b { left:-2px; background:#ff3a36; box-shadow:0 0 11px rgba(255,58,54,.9); }
-.suv { left:15%; top:69%; background:linear-gradient(145deg,#4d626d,#1b2a33); transform:scale(1.08); }
-.white { left:37%; top:55%; background:linear-gradient(145deg,#d6dfe3,#728590); transform:scale(.78); }
-.blue { right:8%; top:76%; background:linear-gradient(145deg,#185491,#0d2948); transform:scale(.94); }
-.light-green .suv { transform:translateX(320px) scale(1.08); }
-.light-green .white { transform:translateX(230px) scale(.78); }
-.light-green .blue { transform:translateX(210px) scale(.94); }
+.vehicle {
+  position:absolute;
+  z-index:17;
+  width:132px;
+  height:64px;
+  transform-origin:center center;
+  transition:transform 2.2s cubic-bezier(.2,.75,.15,1), left 2.2s cubic-bezier(.2,.75,.15,1), right 2.2s cubic-bezier(.2,.75,.15,1), top 2.2s cubic-bezier(.2,.75,.15,1);
+  pointer-events:none;
+}
+.vehicle-shadow {
+  position:absolute;
+  left:12px; right:10px; bottom:2px;
+  height:18px;
+  border-radius:50%;
+  background:rgba(0,0,0,.48);
+  filter:blur(8px);
+  transform:skewX(-10deg);
+}
+.vehicle-body {
+  position:absolute;
+  left:5px; right:5px; bottom:12px;
+  height:35px;
+  border-radius:14px 22px 10px 12px;
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.16),
+    inset 0 -5px 10px rgba(0,0,0,.28),
+    0 12px 15px rgba(0,0,0,.32);
+  overflow:visible;
+}
+.vehicle-hood {
+  position:absolute;
+  right:-2px; top:7px;
+  width:37px; height:20px;
+  border-radius:6px 15px 8px 3px;
+  background:inherit;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+}
+.vehicle-cabin {
+  position:absolute;
+  left:36px; top:-16px;
+  width:57px; height:25px;
+  border-radius:18px 22px 4px 4px;
+  background:linear-gradient(145deg,rgba(85,119,140,.95),rgba(18,43,57,.96));
+  border:1px solid rgba(185,220,235,.13);
+  transform:skewX(-7deg);
+  overflow:hidden;
+}
+.vehicle-cabin:after {
+  content:"";
+  position:absolute;
+  top:2px; bottom:2px; left:31px;
+  width:2px;
+  background:rgba(4,14,20,.7);
+}
+.glass {
+  position:absolute;
+  top:3px; bottom:4px;
+  background:linear-gradient(145deg,rgba(121,181,207,.52),rgba(7,28,40,.9));
+  box-shadow:inset 0 1px 6px rgba(174,222,242,.08);
+}
+.glass.front { right:3px; width:21px; border-radius:2px 13px 2px 2px; }
+.glass.side { left:4px; width:24px; border-radius:10px 2px 2px 2px; }
 
+.wheel {
+  position:absolute;
+  bottom:-11px;
+  width:22px; height:22px;
+  border-radius:50%;
+  background:#050708;
+  border:4px solid #1a242a;
+  box-shadow:0 2px 5px rgba(0,0,0,.6);
+}
+.wheel i {
+  position:absolute;
+  inset:4px;
+  border-radius:50%;
+  background:radial-gradient(circle,#8d9aa1 0 23%,#34444c 24% 52%,#0a0e10 53%);
+}
+.wheel.front { right:19px; }
+.wheel.rear { left:18px; }
+
+.headlight,.taillight {
+  position:absolute;
+  top:14px;
+  width:8px; height:5px;
+  border-radius:3px;
+}
+.headlight.right { right:-3px; background:#fff5c7; box-shadow:8px 0 16px rgba(255,245,199,.5),0 0 10px rgba(255,245,199,.85); }
+.headlight.left { right:7px; background:#ffe9a5; box-shadow:0 0 8px rgba(255,233,165,.55); opacity:.55; }
+.taillight.left { left:-3px; background:#ff3737; box-shadow:-7px 0 14px rgba(255,55,55,.45),0 0 10px rgba(255,55,55,.8); }
+.taillight.right { left:7px; background:#e92331; box-shadow:0 0 8px rgba(233,35,49,.45); opacity:.65; }
+
+.vehicle-suv {
+  left:13%;
+  top:68%;
+  transform:rotate(-4deg) scale(1.02);
+}
+.vehicle-suv .vehicle-body {
+  height:39px;
+  border-radius:13px 19px 8px 10px;
+  background:linear-gradient(145deg,#647783,#273842 48%,#15232b);
+}
+.vehicle-suv .vehicle-cabin {
+  left:33px; top:-18px; width:63px; height:28px;
+}
+.vehicle-suv .vehicle-hood { width:40px; }
+
+.vehicle-hatch {
+  left:37%;
+  top:54%;
+  transform:rotate(-1deg) scale(.73);
+  filter:brightness(1.08);
+}
+.vehicle-hatch .vehicle-body {
+  background:linear-gradient(145deg,#d9e0e4,#8c9ba4 50%,#5b6c76);
+  border-radius:15px 17px 8px 11px;
+}
+.vehicle-hatch .vehicle-cabin {
+  left:31px; width:54px; height:24px;
+  background:linear-gradient(145deg,rgba(126,168,190,.9),rgba(29,51,61,.95));
+}
+
+.vehicle-sedan {
+  right:7%;
+  top:75%;
+  transform:rotate(2deg) scale(.94);
+}
+.vehicle-sedan .vehicle-body {
+  background:linear-gradient(145deg,#286aaa,#123f70 48%,#0b2747);
+  border-radius:12px 24px 8px 10px;
+}
+.vehicle-sedan .vehicle-cabin {
+  left:39px; top:-15px; width:55px; height:23px;
+  background:linear-gradient(145deg,rgba(70,123,157,.95),rgba(11,33,49,.98));
+}
+
+.light-red .vehicle-suv { transform:rotate(-4deg) translateX(0) scale(1.02); }
+.light-red .vehicle-hatch { transform:rotate(-1deg) translateX(0) scale(.73); }
+.light-red .vehicle-sedan { transform:rotate(2deg) translateX(0) scale(.94); }
+
+.light-yellow .vehicle-suv { transform:rotate(-4deg) translateX(46px) scale(1.02); }
+.light-yellow .vehicle-hatch { transform:rotate(-1deg) translateX(28px) scale(.73); }
+.light-yellow .vehicle-sedan { transform:rotate(2deg) translateX(34px) scale(.94); }
+
+.light-green .vehicle-suv { transform:rotate(-4deg) translateX(390px) scale(1.02); }
+.light-green .vehicle-hatch { transform:rotate(-1deg) translateX(310px) scale(.73); }
+.light-green .vehicle-sedan { transform:rotate(2deg) translateX(330px) scale(.94); }
+
+.light-fault .vehicle,
+.light-off .vehicle {
+  filter:saturate(.55) brightness(.8);
+}
 .road-reflection { position:absolute; z-index:8; width:120px; height:10px; filter:blur(10px); opacity:.22; }
 .r-red { left:35%; top:71%; background:#ff2b33; transform:rotate(-14deg); }
 .r-green { right:24%; top:58%; background:#25f18c; transform:rotate(14deg); }
