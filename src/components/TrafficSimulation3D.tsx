@@ -1,4 +1,5 @@
 import { Canvas, useFrame } from '@react-three/fiber'
+import { OrbitControls } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { TrafficState } from '../types'
@@ -156,49 +157,106 @@ function CityBlocks() {
   )
 }
 
+function RoadMark({
+  position,
+  size,
+  color = '#e7e8e1',
+}: {
+  position: [number, number, number]
+  size: [number, number]
+  color?: string
+}) {
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={position}>
+      <planeGeometry args={size} />
+      <meshBasicMaterial color={color} />
+    </mesh>
+  )
+}
+
 function RoadScene() {
+  const intersectionHalf = 4.2
+
+  const horizontalDashX = [-18, -15, -12, -9, 9, 12, 15, 18]
+  const verticalDashZ = [-10, -7, 7, 10]
+
   return (
     <>
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.03, 0]}>
+        <planeGeometry args={[44, 28]} />
+        <meshStandardMaterial color="#0c1216" roughness={0.98} />
+      </mesh>
+
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[40, 24]} />
-        <meshStandardMaterial color="#0b1115" roughness={0.95} />
+        <planeGeometry args={[44, 8.4]} />
+        <meshStandardMaterial color="#242b2f" roughness={0.86} metalness={0.04} />
       </mesh>
 
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-        <planeGeometry args={[40, 7.3]} />
-        <meshStandardMaterial color="#20272b" roughness={0.78} metalness={0.08} />
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
+        <planeGeometry args={[8.4, 28]} />
+        <meshStandardMaterial color="#242b2f" roughness={0.86} metalness={0.04} />
       </mesh>
 
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.014, -0.05]}>
-        <planeGeometry args={[7.5, 24]} />
-        <meshStandardMaterial color="#20272b" roughness={0.78} metalness={0.08} />
-      </mesh>
-
-      {Array.from({ length: 12 }).map((_, i) => (
-        <mesh
-          key={`lane-${i}`}
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[-17 + i * 3.1, 0.03, 0]}
-        >
-          <planeGeometry args={[1.5, 0.08]} />
-          <meshBasicMaterial color="#d8d8c6" />
-        </mesh>
+      {/* Double yellow center line - horizontal road, interrupted through intersection */}
+      {[-0.13, 0.13].map((z, lineIndex) => (
+        <group key={`hy-${lineIndex}`}>
+          <RoadMark position={[-13.1, 0.018, z]} size={[17.8, 0.07]} color="#e5c84e" />
+          <RoadMark position={[13.1, 0.018, z]} size={[17.8, 0.07]} color="#e5c84e" />
+        </group>
       ))}
 
+      {/* Double yellow center line - vertical road */}
+      {[-0.13, 0.13].map((x, lineIndex) => (
+        <group key={`vy-${lineIndex}`}>
+          <RoadMark position={[x, 0.019, -9.1]} size={[0.07, 9.8]} color="#e5c84e" />
+          <RoadMark position={[x, 0.019, 9.1]} size={[0.07, 9.8]} color="#e5c84e" />
+        </group>
+      ))}
+
+      {/* Dashed white lane separators - horizontal */}
+      {[-2.1, 2.1].map((z) =>
+        horizontalDashX.map((x, i) => (
+          <RoadMark key={`hd-${z}-${i}`} position={[x, 0.02, z]} size={[1.55, 0.075]} />
+        )),
+      )}
+
+      {/* Dashed white lane separators - vertical */}
+      {[-2.1, 2.1].map((x) =>
+        verticalDashZ.map((z, i) => (
+          <RoadMark key={`vd-${x}-${i}`} position={[x, 0.021, z]} size={[0.075, 1.55]} />
+        )),
+      )}
+
+      {/* Edge lines */}
+      <RoadMark position={[0, 0.018, 4.05]} size={[44, 0.08]} />
+      <RoadMark position={[0, 0.018, -4.05]} size={[44, 0.08]} />
+      <RoadMark position={[4.05, 0.019, 0]} size={[0.08, 28]} />
+      <RoadMark position={[-4.05, 0.019, 0]} size={[0.08, 28]} />
+
+      {/* Stop lines before pedestrian crossings */}
+      <RoadMark position={[-5.55, 0.03, 2.05]} size={[0.16, 3.65]} />
+      <RoadMark position={[5.55, 0.03, -2.05]} size={[0.16, 3.65]} />
+      <RoadMark position={[-2.05, 0.031, -5.55]} size={[3.65, 0.16]} />
+      <RoadMark position={[2.05, 0.031, 5.55]} size={[3.65, 0.16]} />
+
+      {/* Zebra crossings on all four sides */}
       {Array.from({ length: 7 }).map((_, i) => (
-        <mesh
-          key={`cross-${i}`}
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[-1.2 + i * 0.42, 0.035, 2.25]}
-        >
-          <planeGeometry args={[0.22, 2.6]} />
-          <meshBasicMaterial color="#d9dfdd" />
-        </mesh>
+        <RoadMark key={`cw-west-${i}`} position={[-4.95 + i * 0.18, 0.034, 0]} size={[0.10, 7.25]} />
+      ))}
+      {Array.from({ length: 7 }).map((_, i) => (
+        <RoadMark key={`cw-east-${i}`} position={[4.95 - i * 0.18, 0.034, 0]} size={[0.10, 7.25]} />
+      ))}
+      {Array.from({ length: 7 }).map((_, i) => (
+        <RoadMark key={`cw-south-${i}`} position={[0, 0.035, -4.95 + i * 0.18]} size={[7.25, 0.10]} />
+      ))}
+      {Array.from({ length: 7 }).map((_, i) => (
+        <RoadMark key={`cw-north-${i}`} position={[0, 0.035, 4.95 - i * 0.18]} size={[7.25, 0.10]} />
       ))}
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[-2.55, 0.04, 1.8]}>
-        <planeGeometry args={[0.12, 3]} />
-        <meshBasicMaterial color="#ffffff" />
+      {/* Intersection boundary / asphalt patch */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.007, 0]}>
+        <planeGeometry args={[intersectionHalf * 2, intersectionHalf * 2]} />
+        <meshStandardMaterial color="#20272b" roughness={0.84} metalness={0.03} />
       </mesh>
 
       <CityBlocks />
@@ -216,9 +274,9 @@ function TrafficCars({
   const refs = useRef(new Map<number, THREE.Group>())
   const idRef = useRef(1)
   const spawnClock = useRef(0)
-  const stopLine = -3.5
-  const exitX = 18
-  const spawnX = -18
+  const stopLine = -5.55
+  const exitX = 21
+  const spawnX = -21
 
   useEffect(() => {
     carsRef.current = cars
@@ -252,7 +310,7 @@ function TrafficCars({
 
     nextCars.forEach((car, index) => {
       const ahead = index > 0 ? nextCars[index - 1] : null
-      const crossedStopLine = car.x > stopLine + 0.25
+      const crossedStopLine = car.x > stopLine + car.length * 0.5 + 0.15
       const mustStopForSignal = !traffic.green && !crossedStopLine
 
       let targetX = Number.POSITIVE_INFINITY
@@ -309,7 +367,7 @@ function TrafficCars({
             if (node) refs.current.set(car.id, node)
             else refs.current.delete(car.id)
           }}
-          position={[car.x, 0.02, 1.7]}
+          position={[car.x, 0.02, 2.05]}
           scale={index % 2 === 0 ? 0.9 : 0.82}
         >
           <CarModel kind={car.kind} color={car.color} />
@@ -339,6 +397,20 @@ function Scene({ traffic }: { traffic: TrafficState }) {
       <RoadScene />
       <TrafficLight3D traffic={traffic} />
       <TrafficCars traffic={traffic} />
+
+      <OrbitControls
+        makeDefault
+        target={[0, 0.7, 0]}
+        enableDamping
+        dampingFactor={0.08}
+        minDistance={7}
+        maxDistance={28}
+        minPolarAngle={0.35}
+        maxPolarAngle={1.42}
+        panSpeed={0.85}
+        rotateSpeed={0.7}
+        zoomSpeed={0.9}
+      />
     </>
   )
 }
@@ -357,6 +429,11 @@ export function TrafficSimulation3D({ traffic }: TrafficSimulation3DProps) {
       <div className="traffic-3d-label">
         <span>TRÁFEGO 3D</span>
         <strong>Fila dinâmica • spawn / despawn • semáforo ativo</strong>
+      </div>
+      <div className="traffic-3d-help">
+        <span>Arraste: girar</span>
+        <span>Botão direito: mover</span>
+        <span>Scroll: zoom</span>
       </div>
     </div>
   )
