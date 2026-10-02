@@ -1,3 +1,5 @@
+import type { PlcConfig, TrafficState } from './types'
+
 export {}
 
 declare global {
@@ -14,23 +16,6 @@ declare global {
         }>
         status: () => Promise<{ connected: boolean; config?: PlcConfig | null }>
       }
-    }
-  }
-
-  type TrafficState = {
-    red: boolean
-    yellow: boolean
-    green: boolean
-  }
-
-  type PlcConfig = {
-    host: string
-    rack: number
-    slot: number
-    tags: {
-      red: string
-      yellow: string
-      green: string
     }
   }
 }
