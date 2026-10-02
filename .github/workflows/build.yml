@@ -1,0 +1,25 @@
+name: Build
+
+on:
+  push:
+    branches: [main, feature/semaforo-mvp]
+  pull_request:
+    branches: [main]
+
+jobs:
+  desktop-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: TypeScript + Vite build
+        run: npm run build
