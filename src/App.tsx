@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import { trafficLightProject } from './projects/trafficLight'
 import { getActiveLights, validateTrafficState } from './lib/trafficValidator'
+import { TrafficSimulation3D } from './components/TrafficSimulation3D'
 import type { PlcConfig, TrafficState } from './types'
 
 type Mode = 'simulation' | 'plc'
@@ -273,11 +274,8 @@ function App() {
 
           <section className="workspace-grid">
             <section className="simulation-card panel">
-              <div className={`city-lab light-${activeLight}`}>
-                <div className="city-sky">
-                  <div className="sky-glow" />
-                  {Array.from({ length: 18 }).map((_, i) => <i key={i} className={`building b${(i % 6) + 1}`} />)}
-                </div>
+              <div className="city-lab city-lab-3d">
+                <TrafficSimulation3D traffic={traffic} running={running} />
 
                 <div className="telemetry-overlay">
                   <div><span>Estado Atual</span><strong><i className={`state-led ${activeLight}`} />{stateLabel[activeLight]}</strong></div>
@@ -288,77 +286,9 @@ function App() {
 
                 <div className="plant-virtual">
                   <Building2 size={17} />
-                  <div><span>PLANTA VIRTUAL</span><strong>Interseção Urbana</strong></div>
+                  <div><span>PLANTA VIRTUAL</span><strong>Interseção 3D</strong></div>
                   <ChevronRight size={14} className="rotate-90" />
                 </div>
-
-                <div className="scene-road road-horizontal">
-                  <div className="lane-stripe s1" /><div className="lane-stripe s2" />
-                </div>
-                <div className="scene-road road-vertical">
-                  <div className="lane-stripe s1" /><div className="lane-stripe s2" />
-                </div>
-                <div className="crosswalk cw-left">{Array.from({length:6}).map((_,i)=><i key={i}/>)}</div>
-                <div className="crosswalk cw-right">{Array.from({length:6}).map((_,i)=><i key={i}/>)}</div>
-
-                <div className="traffic-main">
-                  <div className="arm arm-left" /><div className="arm arm-right" />
-                  <div className="signal-head">
-                    <span className={traffic.red ? 'lamp red on' : 'lamp red'} />
-                    <span className={traffic.yellow ? 'lamp yellow on' : 'lamp yellow'} />
-                    <span className={traffic.green ? 'lamp green on' : 'lamp green'} />
-                  </div>
-                  <div className="signal-pole" />
-                  <div className="signal-base" />
-                </div>
-
-                <div className="traffic-mini mini-a"><span className="mini-red on"/><span/><span className="mini-green"/></div>
-                <div className="traffic-mini mini-b"><span/><span/><span className="mini-green on"/></div>
-                <div className="traffic-mini mini-c"><span className="mini-red"/><span/><span className="mini-green on"/></div>
-
-                <div className="vehicle vehicle-suv">
-                  <div className="vehicle-shadow" />
-                  <div className="vehicle-body">
-                    <div className="vehicle-hood" />
-                    <div className="vehicle-cabin">
-                      <span className="glass front" />
-                      <span className="glass side" />
-                    </div>
-                    <span className="headlight left" /><span className="headlight right" />
-                    <span className="taillight left" /><span className="taillight right" />
-                    <div className="wheel front"><i /></div><div className="wheel rear"><i /></div>
-                  </div>
-                </div>
-                <div className="vehicle vehicle-hatch">
-                  <div className="vehicle-shadow" />
-                  <div className="vehicle-body">
-                    <div className="vehicle-hood" />
-                    <div className="vehicle-cabin">
-                      <span className="glass front" />
-                      <span className="glass side" />
-                    </div>
-                    <span className="headlight left" /><span className="headlight right" />
-                    <span className="taillight left" /><span className="taillight right" />
-                    <div className="wheel front"><i /></div><div className="wheel rear"><i /></div>
-                  </div>
-                </div>
-                <div className="vehicle vehicle-sedan">
-                  <div className="vehicle-shadow" />
-                  <div className="vehicle-body">
-                    <div className="vehicle-hood" />
-                    <div className="vehicle-cabin">
-                      <span className="glass front" />
-                      <span className="glass side" />
-                    </div>
-                    <span className="headlight left" /><span className="headlight right" />
-                    <span className="taillight left" /><span className="taillight right" />
-                    <div className="wheel front"><i /></div><div className="wheel rear"><i /></div>
-                  </div>
-                </div>
-
-                <div className="road-reflection r-red" />
-                <div className="road-reflection r-green" />
-                <div className="scene-vignette" />
               </div>
 
               <div className="phase-control">
