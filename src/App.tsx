@@ -54,7 +54,11 @@ function App() {
   const [seenStates, setSeenStates] = useState(() => new Set<string>())
   const [phaseStartedAt, setPhaseStartedAt] = useState(Date.now())
   const [phaseElapsed, setPhaseElapsed] = useState(0)
+  const [timingPass, setTimingPass] = useState(() => new Set<string>())
+  const [sequenceFault, setSequenceFault] = useState(false)
   const previousState = useRef('')
+  const lastPhase = useRef<'red' | 'yellow' | 'green' | null>(null)
+  const phaseStartedAtRef = useRef(Date.now())
 
   const steps = trafficLightProject.sequence
 
@@ -95,18 +99,41 @@ function App() {
 
   useEffect(() => {
     const signature = `${traffic.red ? 1 : 0}${traffic.yellow ? 1 : 0}${traffic.green ? 1 : 0}`
-    if (signature !== previousState.current) {
-      previousState.current = signature
-      setPhaseStartedAt(Date.now())
-      if (activeLights.length === 1) {
-        setSeenStates((current) => {
+    if (signature === previousState.current) return
+
+    previousState.current = signature
+    const now = Date.now()
+    const currentKey = activeLights.length === 1 ? activeLights[0] : null
+    const previousKey = lastPhase.current
+
+    if (previousKey && currentKey && previousKey !== currentKey) {
+      const elapsedMs = now - phaseStartedAtRef.current
+      const expected = steps.find((step) => step.key === previousKey)
+      if (expected && Math.abs(elapsedMs - expected.durationMs) <= 850) {
+        setTimingPass((current) => {
           const next = new Set(current)
-          next.add(activeLights[0])
+          next.add(previousKey)
           return next
         })
       }
+
+      const previousIndex = steps.findIndex((step) => step.key === previousKey)
+      const expectedNext = steps[(previousIndex + 1) % steps.length]?.key
+      if (expectedNext !== currentKey) setSequenceFault(true)
     }
-  }, [traffic, activeLights])
+
+    phaseStartedAtRef.current = now
+    setPhaseStartedAt(now)
+
+    if (currentKey) {
+      lastPhase.current = currentKey
+      setSeenStates((current) => {
+        const next = new Set(current)
+        next.add(currentKey)
+        return next
+      })
+    }
+  }, [traffic, activeLights, steps])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -115,9 +142,16 @@ function App() {
     return () => window.clearInterval(timer)
   }, [phaseStartedAt])
 
-  const score = Math.round((seenStates.size / 3) * 75 + (activeLights.length === 1 ? 25 : 0))
   const allPhasesSeen = seenStates.size === 3
   const safeNow = activeLights.length === 1
+  const sequencePass = seenStates.size >= 2 && !sequenceFault
+  const score = Math.min(
+    100,
+    (safeNow ? 20 : 0) +
+      seenStates.size * 10 +
+      timingPass.size * 10 +
+      (sequencePass ? 20 : 0),
+  )
 
   const connect = async () => {
     setMode('plc')
@@ -140,6 +174,10 @@ function App() {
 
   const resetLab = () => {
     setSeenStates(new Set())
+    setTimingPass(new Set())
+    setSequenceFault(false)
+    lastPhase.current = null
+    phaseStartedAtRef.current = Date.now()
     setPhase(0)
     setTraffic(lightToState('red'))
     setRunning(true)
@@ -321,6 +359,14 @@ function App() {
                     <div><strong>{item.title}</strong><small>{item.detail}</small></div>
                   </div>
                 ))}
+                <div className={`validation-item ${sequenceFault ? 'fail' : sequencePass ? 'pass' : 'waiting'}`}>
+                  <div className="validation-icon">{sequenceFault ? <AlertTriangle size={14} /> : sequencePass ? <Check size={14} /> : <CircleDot size={12} />}</div>
+                  <div><strong>Ordem da sequência</strong><small>{sequenceFault ? 'Foi detectada uma transição fora da ordem vermelho → verde → amarelo.' : sequencePass ? 'Transições observadas na ordem esperada.' : 'Aguardando a próxima transição.'}</small></div>
+                </div>
+                <div className={`validation-item ${timingPass.size === 3 ? 'pass' : 'waiting'}`}>
+                  <div className="validation-icon">{timingPass.size === 3 ? <Check size={14} /> : <Clock3 size={12} />}</div>
+                  <div><strong>Temporização das fases</strong><small>{timingPass.size === 3 ? '5 s / 6 s / 2 s validados dentro da tolerância.' : `${timingPass.size}/3 temporizações validadas.`}</small></div>
+                </div>
                 <div className={`validation-item ${allPhasesSeen ? 'pass' : 'waiting'}`}>
                   <div className="validation-icon">{allPhasesSeen ? <Check size={14} /> : <CircleDot size={12} />}</div>
                   <div><strong>Ciclo completo observado</strong><small>{allPhasesSeen ? 'As três fases foram detectadas.' : `${seenStates.size}/3 fases identificadas.`}</small></div>
