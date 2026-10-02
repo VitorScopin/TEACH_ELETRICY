@@ -13,7 +13,9 @@
     "lucide-react": "^0.544.0",
     "nodes7": "^0.3.18",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "@react-three/fiber": "^9.3.0",
+    "three": "^0.180.0"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
@@ -25,6 +27,7 @@
     "electron": "^44.5.1",
     "typescript": "^5.9.2",
     "vite": "^8.3.2",
-    "wait-on": "^8.0.4"
+    "wait-on": "^8.0.4",
+    "@types/three": "^0.180.0"
   }
 }
