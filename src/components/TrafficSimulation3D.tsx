@@ -1,6 +1,6 @@
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { useMemo, useRef, useState } from 'react'
+import { Suspense, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import {
   TRAFFIC_GEOMETRY,
@@ -10,9 +10,12 @@ import {
 } from '../simulation/trafficWorld'
 import type { TrafficState } from '../types'
 
+type VehicleModelSource = 'kenney' | 'mit'
+
 type CarData = {
   id: number
   kind: VehicleKind
+  modelSource: VehicleModelSource
   color: string
   x: number
   speed: number
@@ -105,6 +108,78 @@ function CarModel({
     </group>
   )
 }
+
+
+const VEHICLE_MODEL_PATHS: Record<VehicleModelSource, string> = {
+  kenney: '/models/vehicles/kenney-sedan.glb',
+  mit: '/models/vehicles/mit-car.glb',
+}
+
+function ImportedCarModel({
+  source,
+  kind,
+  braking,
+}: {
+  source: VehicleModelSource
+  kind: VehicleKind
+  braking: boolean
+}) {
+  const { scene } = useGLTF(VEHICLE_MODEL_PATHS[source])
+
+  const normalized = useMemo(() => {
+    const model = scene.clone(true)
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true
+        child.receiveShadow = true
+        if (Array.isArray(child.material)) {
+          child.material = child.material.map((material) => material.clone())
+        } else if (child.material) {
+          child.material = child.material.clone()
+        }
+      }
+    })
+
+    const bounds = new THREE.Box3().setFromObject(model)
+    const size = bounds.getSize(new THREE.Vector3())
+    const center = bounds.getCenter(new THREE.Vector3())
+    const rawLength = Math.max(size.x, size.z, 0.001)
+    const scale = VEHICLE_DIMENSIONS[kind].length / rawLength
+    const rotationY = size.z >= size.x ? Math.PI / 2 : 0
+
+    return {
+      model,
+      scale,
+      rotationY,
+      offset: new THREE.Vector3(-center.x, -bounds.min.y, -center.z),
+    }
+  }, [scene, kind])
+
+  const dims = VEHICLE_DIMENSIONS[kind]
+
+  return (
+    <group>
+      <group rotation={[0, normalized.rotationY, 0]} scale={normalized.scale}>
+        <primitive object={normalized.model} position={normalized.offset} />
+      </group>
+
+      {/* Generic brake lights guarantee visible traffic feedback even when the source GLB has no emissive lamps. */}
+      {[-0.31, 0.31].map((z) => (
+        <mesh key={z} position={[-dims.length * 0.505, 0.7, dims.width * z]}>
+          <boxGeometry args={[0.035, 0.12, 0.2]} />
+          <meshStandardMaterial
+            color="#ff3434"
+            emissive="#ff2020"
+            emissiveIntensity={braking ? 4.5 : 0.8}
+          />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+useGLTF.preload(VEHICLE_MODEL_PATHS.kenney)
+useGLTF.preload(VEHICLE_MODEL_PATHS.mit)
 
 function SignalHead({ traffic }: { traffic: TrafficState }) {
   const lamps = [
@@ -375,6 +450,7 @@ function TrafficCars({
       const car: CarData = {
         id,
         kind,
+        modelSource: id % 2 === 0 ? 'kenney' : 'mit',
         color: COLORS[id % COLORS.length],
         x: TRAFFIC_WORLD.spawnX,
         speed: 0,
@@ -452,7 +528,9 @@ function TrafficCars({
           }}
           position={[car.x, 0.02, TRAFFIC_WORLD.eastboundLaneZ]}
         >
-          <CarModel kind={car.kind} color={car.color} braking={car.braking} />
+          <Suspense fallback={<CarModel kind={car.kind} color={car.color} braking={car.braking} />}>
+            <ImportedCarModel source={car.modelSource} kind={car.kind} braking={car.braking} />
+          </Suspense>
         </group>
       ))}
     </>
