@@ -10,11 +10,14 @@ import {
 } from '../simulation/trafficWorld'
 import type { TrafficState } from '../types'
 
+type FlowId = 'eastbound' | 'westbound' | 'northbound' | 'southbound'
+
 type CarData = {
   id: number
   kind: VehicleKind
   color: string
-  x: number
+  flow: FlowId
+  progress: number
   speed: number
   desiredSpeed: number
   length: number
@@ -24,6 +27,8 @@ type CarData = {
 type TrafficSimulation3DProps = {
   traffic: TrafficState
   running: boolean
+  phaseElapsed: number
+  phaseDuration: number
 }
 
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
@@ -593,141 +598,265 @@ function RoadScene() {
   )
 }
 
+type FlowDefinition = {
+  id: FlowId
+  spawn: number
+  exit: number
+  stopProgress: number
+  rotationY: number
+  signalGroup: 'main' | 'cross'
+  toWorld: (progress: number) => [number, number, number]
+}
+
+const VERTICAL_SPAWN = -(TRAFFIC_WORLD.worldDepth / 2 - 1)
+const VERTICAL_EXIT = TRAFFIC_WORLD.worldDepth / 2 - 1
+
+const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
+  eastbound: {
+    id: 'eastbound',
+    spawn: TRAFFIC_WORLD.spawnX,
+    exit: TRAFFIC_WORLD.exitX,
+    stopProgress: TRAFFIC_GEOMETRY.westStopLineX,
+    rotationY: 0,
+    signalGroup: 'main',
+    toWorld: (progress) => [progress, 0.02, TRAFFIC_WORLD.eastboundLaneZ],
+  },
+  westbound: {
+    id: 'westbound',
+    spawn: TRAFFIC_WORLD.spawnX,
+    exit: TRAFFIC_WORLD.exitX,
+    stopProgress: -TRAFFIC_GEOMETRY.eastStopLineX,
+    rotationY: Math.PI,
+    signalGroup: 'main',
+    toWorld: (progress) => [-progress, 0.02, TRAFFIC_WORLD.westboundLaneZ],
+  },
+  northbound: {
+    id: 'northbound',
+    spawn: VERTICAL_SPAWN,
+    exit: VERTICAL_EXIT,
+    stopProgress: -TRAFFIC_GEOMETRY.northStopLineZ,
+    rotationY: Math.PI / 2,
+    signalGroup: 'cross',
+    toWorld: (progress) => [TRAFFIC_WORLD.eastboundLaneZ, 0.02, -progress],
+  },
+  southbound: {
+    id: 'southbound',
+    spawn: VERTICAL_SPAWN,
+    exit: VERTICAL_EXIT,
+    stopProgress: TRAFFIC_GEOMETRY.southStopLineZ,
+    rotationY: -Math.PI / 2,
+    signalGroup: 'cross',
+    toWorld: (progress) => [-TRAFFIC_WORLD.eastboundLaneZ, 0.02, progress],
+  },
+}
+
+const FLOW_ORDER: FlowId[] = ['eastbound', 'westbound', 'northbound', 'southbound']
+
 function TrafficCars({
-  traffic,
+  mainTraffic,
+  crossTraffic,
   running,
 }: {
-  traffic: TrafficState
+  mainTraffic: TrafficState
+  crossTraffic: TrafficState
   running: boolean
 }) {
   const [cars, setCars] = useState<CarData[]>([])
   const carsRef = useRef<CarData[]>([])
   const refs = useRef(new Map<number, THREE.Group>())
   const idRef = useRef(1)
-  const spawnClock = useRef(0)
+  const spawnClocks = useRef<Record<FlowId, number>>({
+    eastbound: 0,
+    westbound: 0.65,
+    northbound: 1.15,
+    southbound: 1.7,
+  })
 
   useFrame((_state, deltaRaw) => {
     const delta = Math.min(deltaRaw, 0.05)
     if (!running) return
 
-    spawnClock.current += delta
+    let workingCars = carsRef.current
+    let spawned = false
 
-    const ordered = [...carsRef.current].sort((a, b) => b.x - a.x)
-    const lastCar = ordered.length ? ordered[ordered.length - 1] : null
-    const spawnClear = !lastCar || lastCar.x > TRAFFIC_WORLD.spawnX + 8
+    for (const flowId of FLOW_ORDER) {
+      const def = FLOW_DEFINITIONS[flowId]
+      spawnClocks.current[flowId] += delta
 
-    if (spawnClock.current > 2.1 && spawnClear) {
-      spawnClock.current = 0
-      const id = idRef.current++
-      const kind = KINDS[id % KINDS.length]
-      const dims = VEHICLE_DIMENSIONS[kind]
+      const flowCars = workingCars
+        .filter((car) => car.flow === flowId)
+        .sort((a, b) => b.progress - a.progress)
 
-      const car: CarData = {
-        id,
-        kind,
-        color: COLORS[id % COLORS.length],
-        x: TRAFFIC_WORLD.spawnX,
-        speed: 0,
-        desiredSpeed: 6.2 + (id % 3) * 0.45,
-        length: dims.length,
-        braking: false,
+      const tail = flowCars.length ? flowCars[flowCars.length - 1] : null
+      const spawnClear = !tail || tail.progress > def.spawn + 8.5
+      const interval = flowId === 'eastbound' || flowId === 'westbound' ? 2.4 : 2.8
+
+      if (spawnClocks.current[flowId] >= interval && spawnClear) {
+        spawnClocks.current[flowId] = 0
+        const id = idRef.current++
+        const kind = KINDS[id % KINDS.length]
+        const dims = VEHICLE_DIMENSIONS[kind]
+
+        workingCars = [
+          ...workingCars,
+          {
+            id,
+            kind,
+            color: COLORS[id % COLORS.length],
+            flow: flowId,
+            progress: def.spawn,
+            speed: 0,
+            desiredSpeed: 5.6 + (id % 4) * 0.42,
+            length: dims.length,
+            braking: false,
+          },
+        ]
+        spawned = true
       }
-
-      carsRef.current = [...carsRef.current, car]
-      setCars([...carsRef.current])
     }
 
-    const nextCars = [...carsRef.current].sort((a, b) => b.x - a.x)
+    let brakingChanged = false
 
-    nextCars.forEach((car, index) => {
-      const ahead = index > 0 ? nextCars[index - 1] : null
-      const carFront = car.x + car.length / 2
-      const hasEnteredIntersection = carFront > TRAFFIC_GEOMETRY.westCrosswalkCenterX + TRAFFIC_WORLD.crosswalkWidth / 2
-      const mustStopForSignal = !traffic.green && !hasEnteredIntersection
+    for (const flowId of FLOW_ORDER) {
+      const def = FLOW_DEFINITIONS[flowId]
+      const signal = def.signalGroup === 'main' ? mainTraffic : crossTraffic
+      const flowCars = workingCars
+        .filter((car) => car.flow === flowId)
+        .sort((a, b) => b.progress - a.progress)
 
-      let targetFrontX = Number.POSITIVE_INFINITY
+      flowCars.forEach((car, index) => {
+        const ahead = index > 0 ? flowCars[index - 1] : null
+        const front = car.progress + car.length / 2
+        const hasEnteredIntersection = front > -TRAFFIC_WORLD.intersectionHalf
+        const mustStopForSignal = !signal.green && !hasEnteredIntersection
 
-      if (mustStopForSignal) {
-        targetFrontX = TRAFFIC_GEOMETRY.westStopLineX - 0.18
-      }
+        let targetFront = Number.POSITIVE_INFINITY
 
-      if (ahead) {
-        const safeGap = Math.max(2.0, car.speed * 0.48)
-        const aheadRear = ahead.x - ahead.length / 2
-        targetFrontX = Math.min(targetFrontX, aheadRear - safeGap)
-      }
+        if (mustStopForSignal) {
+          targetFront = def.stopProgress - 0.2
+        }
 
-      const distance = targetFrontX - carFront
-      let targetSpeed = car.desiredSpeed
+        if (ahead) {
+          const safeGap = Math.max(2.15, car.speed * 0.52)
+          const aheadRear = ahead.progress - ahead.length / 2
+          targetFront = Math.min(targetFront, aheadRear - safeGap)
+        }
 
-      if (Number.isFinite(targetFrontX)) {
-        if (distance <= 0.08) targetSpeed = 0
-        else if (distance < 8) targetSpeed = Math.min(targetSpeed, Math.max(0, distance * 0.78))
-      }
+        const distance = targetFront - front
+        let targetSpeed = car.desiredSpeed
 
-      car.braking = targetSpeed < car.speed - 0.15
-      const accel = targetSpeed > car.speed ? 2.1 : 5.2
-      car.speed = Math.max(
-        0,
-        car.speed + THREE.MathUtils.clamp(targetSpeed - car.speed, -accel * delta, accel * delta),
-      )
-      car.x += car.speed * delta
+        if (Number.isFinite(targetFront)) {
+          if (distance <= 0.08) {
+            targetSpeed = 0
+          } else if (distance < 9) {
+            targetSpeed = Math.min(targetSpeed, Math.max(0, distance * 0.72))
+          }
+        }
 
-      const group = refs.current.get(car.id)
-      if (group) {
-        group.position.x = car.x
-        const wheelSpin = car.speed * delta / 0.34
-        group.traverse((child) => {
-          if (child.userData.wheel) child.rotation.z -= wheelSpin
-        })
-      }
-    })
+        const previousBraking = car.braking
+        car.braking = targetSpeed < car.speed - 0.12
+        if (car.braking !== previousBraking) brakingChanged = true
 
-    const alive = nextCars.filter((car) => car.x < TRAFFIC_WORLD.exitX)
+        const accel = targetSpeed > car.speed ? 2.0 : 5.4
+        car.speed = Math.max(
+          0,
+          car.speed +
+            THREE.MathUtils.clamp(targetSpeed - car.speed, -accel * delta, accel * delta),
+        )
+        car.progress += car.speed * delta
+
+        const group = refs.current.get(car.id)
+        if (group) {
+          const [x, y, z] = def.toWorld(car.progress)
+          group.position.set(x, y, z)
+          const wheelSpin = car.speed * delta / 0.34
+          group.traverse((child) => {
+            if (child.userData.wheel) child.rotation.z -= wheelSpin
+          })
+        }
+      })
+    }
+
+    const alive = workingCars.filter(
+      (car) => car.progress < FLOW_DEFINITIONS[car.flow].exit,
+    )
+    const removed = alive.length !== workingCars.length
+
     carsRef.current = alive
 
-    if (alive.length !== cars.length || alive.some((car, i) => cars[i]?.braking !== car.braking)) {
+    if (spawned || removed || brakingChanged) {
       setCars(alive.map((car) => ({ ...car })))
     }
   })
 
   return (
     <>
-      {cars.map((car) => (
-        <group
-          key={car.id}
-          ref={(node) => {
-            if (node) refs.current.set(car.id, node)
-            else refs.current.delete(car.id)
-          }}
-          position={[car.x, 0.02, TRAFFIC_WORLD.eastboundLaneZ]}
-        >
-          <Suspense fallback={null}>
-            <RealisticCarModel color={car.color} braking={car.braking} />
-          </Suspense>
-        </group>
-      ))}
+      {cars.map((car) => {
+        const def = FLOW_DEFINITIONS[car.flow]
+        return (
+          <group
+            key={car.id}
+            ref={(node) => {
+              if (node) refs.current.set(car.id, node)
+              else refs.current.delete(car.id)
+            }}
+            position={def.toWorld(car.progress)}
+            rotation={[0, def.rotationY, 0]}
+          >
+            <Suspense fallback={null}>
+              <RealisticCarModel color={car.color} braking={car.braking} />
+            </Suspense>
+          </group>
+        )
+      })}
     </>
   )
+}
+
+function buildCrossTraffic(
+  mainTraffic: TrafficState,
+  phaseElapsed: number,
+  phaseDuration: number,
+): TrafficState {
+  if (mainTraffic.green || mainTraffic.yellow) {
+    return { red: true, yellow: false, green: false }
+  }
+
+  if (!mainTraffic.red) {
+    return { red: true, yellow: false, green: false }
+  }
+
+  const yellowWindow = 1.2
+  const allRedWindow = 0.8
+  const yellowStart = Math.max(0, phaseDuration - yellowWindow - allRedWindow)
+  const allRedStart = Math.max(yellowStart, phaseDuration - allRedWindow)
+
+  if (phaseElapsed >= allRedStart) {
+    return { red: true, yellow: false, green: false }
+  }
+
+  if (phaseElapsed >= yellowStart) {
+    return { red: false, yellow: true, green: false }
+  }
+
+  return { red: false, yellow: false, green: true }
 }
 
 function Scene({
   traffic,
   running,
+  phaseElapsed,
+  phaseDuration,
 }: {
   traffic: TrafficState
   running: boolean
+  phaseElapsed: number
+  phaseDuration: number
 }) {
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
   const sidewalkSignalOffset = halfRoad + 0.9
 
-  // The north/south pair is visually interlocked with the PLC-controlled east/west pair.
-  // This keeps the crossing readable while the learning exercise still exposes only one 3-light PLC sequence.
-  const crossTraffic: TrafficState = traffic.green
-    ? { red: true, yellow: false, green: false }
-    : traffic.yellow
-      ? { red: true, yellow: false, green: false }
-      : { red: false, yellow: false, green: true }
+  const crossTraffic = buildCrossTraffic(traffic, phaseElapsed, phaseDuration)
 
   const westSignal: [number, number, number] = [
     TRAFFIC_GEOMETRY.westStopLineX - 0.35,
@@ -776,7 +905,7 @@ function Scene({
       <TrafficLight3D traffic={crossTraffic} position={southSignal} rotationY={0} />
       <TrafficLight3D traffic={crossTraffic} position={northSignal} rotationY={Math.PI} />
 
-      <TrafficCars traffic={traffic} running={running} />
+      <TrafficCars mainTraffic={traffic} crossTraffic={crossTraffic} running={running} />
 
       <OrbitControls
         makeDefault
@@ -797,7 +926,12 @@ function Scene({
   )
 }
 
-export function TrafficSimulation3D({ traffic, running }: TrafficSimulation3DProps) {
+export function TrafficSimulation3D({
+  traffic,
+  running,
+  phaseElapsed,
+  phaseDuration,
+}: TrafficSimulation3DProps) {
   return (
     <div className="traffic-3d-root">
       <Canvas
@@ -806,12 +940,17 @@ export function TrafficSimulation3D({ traffic, running }: TrafficSimulation3DPro
         camera={{ position: [20, 19, 25], fov: 48 }}
         gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       >
-        <Scene traffic={traffic} running={running} />
+        <Scene
+          traffic={traffic}
+          running={running}
+          phaseElapsed={phaseElapsed}
+          phaseDuration={phaseDuration}
+        />
       </Canvas>
 
       <div className="traffic-3d-label">
         <span>TRÁFEGO 3D</span>
-        <strong>Escala métrica • fila dinâmica • semáforo ligado ao PLC</strong>
+        <strong>4 fluxos ativos • filas independentes • semáforos intertravados</strong>
       </div>
 
       <div className="traffic-3d-help">
