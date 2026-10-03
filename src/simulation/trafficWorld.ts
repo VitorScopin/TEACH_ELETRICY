@@ -76,9 +76,9 @@ export const TRAFFIC_GEOMETRY = {
 } as const
 
 export const VEHICLE_DIMENSIONS = {
-  sedan: { length: 4.45, width: 1.82, bodyH: 0.72, cabinH: 0.72, cabinL: 2.15 },
-  suv: { length: 4.7, width: 1.92, bodyH: 0.86, cabinH: 0.86, cabinL: 2.25 },
-  hatch: { length: 4.05, width: 1.78, bodyH: 0.76, cabinH: 0.82, cabinL: 1.95 },
+  sedan: { length: 4.55, width: 1.84, bodyH: 0.74, cabinH: 0.74, cabinL: 2.18 },
+  hatch: { length: 4.12, width: 1.79, bodyH: 0.76, cabinH: 0.8, cabinL: 2.0 },
+  sports: { length: 4.42, width: 1.9, bodyH: 0.66, cabinH: 0.62, cabinL: 1.9 },
 } as const
 
 export type VehicleKind = keyof typeof VEHICLE_DIMENSIONS
