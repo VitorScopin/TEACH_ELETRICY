@@ -164,7 +164,7 @@ function polishVehicleMaterials(model: THREE.Object3D, paintColor: string) {
       return physical
     })
 
-    child.material = wasArray ? polished : polished[0]
+    child.material = wasArray ? polished : (polished[0] ?? originals[0])
   })
 }
 
