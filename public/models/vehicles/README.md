@@ -1,49 +1,20 @@
 # Vehicle 3D assets
 
-This folder contains third-party 3D vehicle models used by the TEACH ELETRICY traffic laboratory.
+The current traffic renderer no longer uses the previous Kenney / compact low-poly vehicle files.
 
-## kenney-sedan.glb
+## Active vehicle model
 
-Original file: `sedanSports.glb`
+TEACH ELETRICY currently uses the **Car Concept** model from KhronosGroup's glTF Sample Assets as the primary traffic vehicle.
 
-Source repository: https://github.com/Dechode/Godot-Advanced-Vehicle
+Source:
+https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept
 
-Original asset pack: Kenney Car Kit 1.2
+The asset is loaded at runtime from the upstream GLB and is not vendored in this folder.
 
-License: Creative Commons Zero (CC0 1.0 Universal)
+License: Creative Commons Attribution 4.0 (CC BY 4.0).
 
-Created/distributed by Kenney (https://www.kenney.nl/).
+The upstream model includes detailed automotive geometry and PBR materials, including clearcoat, glass transmission, interior components, wheels, headlights and brake-light materials.
 
-The source repository includes the asset license at:
-`models/kenney_carkit1/License.txt`
+Original model credits and license details are documented by Khronos in the source repository.
 
-## mit-car.glb
-
-Original file: `car.glb`
-
-Source repository: https://github.com/wassimj/topologicpy
-
-The source repository's model-license manifest states:
-
-MIT License, Copyright (c) 2023 Viktor Kovacs
-
-The model is redistributed under those MIT terms. See the upstream model license manifest:
-`3dviewer/assets/models/README.md`
-
-These files are kept as separate render assets. TEACH ELETRICY's traffic logic remains independent of the model geometry.
-
-
-## cc0-traffic-pack.glb
-
-Source repository: https://github.com/fastrouter/experiments-costa-vista
-
-The source project's `ATTRIBUTION.md` documents the car assets in this pack as based on the Kenney Car Kit and Kenney Toy Car Kit.
-
-License: Creative Commons Zero (CC0 1.0 Universal)
-
-Models used by TEACH ELETRICY:
-- `veh/sedan`
-- `veh/hatchback`
-- `veh/sports`
-
-TEACH ELETRICY applies its own runtime materials, paint colors, lighting, scaling, braking logic, and traffic behavior to these geometries.
+TEACH ELETRICY only applies runtime paint-color variation, brake-light intensity, scale normalization, shadows, and traffic behavior.
