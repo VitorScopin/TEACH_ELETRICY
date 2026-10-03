@@ -295,10 +295,12 @@ function RoadMark({
   rotationY?: number
 }) {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, rotationY]} position={position}>
-      <planeGeometry args={size} />
-      <meshBasicMaterial color={color} toneMapped={false} />
-    </mesh>
+    <group position={position} rotation={[0, rotationY, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={size} />
+        <meshBasicMaterial color={color} toneMapped={false} />
+      </mesh>
+    </group>
   )
 }
 
@@ -599,11 +601,19 @@ function RoadScene() {
         )),
       )}
 
-      {/* Solid road edge lines */}
-      <RoadMark position={[0, 0.037, halfRoad - 0.14]} size={[TRAFFIC_WORLD.roadLength, 0.1]} />
-      <RoadMark position={[0, 0.037, -halfRoad + 0.14]} size={[TRAFFIC_WORLD.roadLength, 0.1]} />
-      <RoadMark position={[halfRoad - 0.14, 0.038, 0]} size={[TRAFFIC_WORLD.worldDepth, 0.1]} rotationY={Math.PI / 2} />
-      <RoadMark position={[-halfRoad + 0.14, 0.038, 0]} size={[TRAFFIC_WORLD.worldDepth, 0.1]} rotationY={Math.PI / 2} />
+      {/* Solid road edge lines, interrupted at the intersection entrances */}
+      {[halfRoad - 0.14, -halfRoad + 0.14].map((z) => (
+        <group key={`edge-h-${z}`}>
+          <RoadMark position={[-21, 0.037, z]} size={[22, 0.1]} />
+          <RoadMark position={[21, 0.037, z]} size={[22, 0.1]} />
+        </group>
+      ))}
+      {[halfRoad - 0.14, -halfRoad + 0.14].map((x) => (
+        <group key={`edge-v-${x}`}>
+          <RoadMark position={[x, 0.038, -16.5]} size={[13, 0.1]} rotationY={Math.PI / 2} />
+          <RoadMark position={[x, 0.038, 16.5]} size={[13, 0.1]} rotationY={Math.PI / 2} />
+        </group>
+      ))}
 
       {/* Stop bars on the approach side of each crosswalk */}
       <RoadMark
@@ -773,47 +783,76 @@ function Scene({
   traffic: TrafficState
   running: boolean
 }) {
-  const farSignalPosition: [number, number, number] = [
-    TRAFFIC_WORLD.intersectionHalf + TRAFFIC_WORLD.crosswalkWidth + 0.6,
+  const halfRoad = TRAFFIC_WORLD.roadWidth / 2
+  const sidewalkSignalOffset = halfRoad + 0.9
+
+  // The north/south pair is visually interlocked with the PLC-controlled east/west pair.
+  // This keeps the crossing readable while the learning exercise still exposes only one 3-light PLC sequence.
+  const crossTraffic: TrafficState = traffic.green
+    ? { red: true, yellow: false, green: false }
+    : traffic.yellow
+      ? { red: true, yellow: false, green: false }
+      : { red: false, yellow: false, green: true }
+
+  const westSignal: [number, number, number] = [
+    TRAFFIC_GEOMETRY.westStopLineX - 0.35,
     0,
-    -TRAFFIC_WORLD.roadWidth / 2 - TRAFFIC_WORLD.shoulderOffset,
+    sidewalkSignalOffset,
+  ]
+  const eastSignal: [number, number, number] = [
+    TRAFFIC_GEOMETRY.eastStopLineX + 0.35,
+    0,
+    -sidewalkSignalOffset,
+  ]
+  const southSignal: [number, number, number] = [
+    -sidewalkSignalOffset,
+    0,
+    TRAFFIC_GEOMETRY.southStopLineZ - 0.35,
+  ]
+  const northSignal: [number, number, number] = [
+    sidewalkSignalOffset,
+    0,
+    TRAFFIC_GEOMETRY.northStopLineZ + 0.35,
   ]
 
   return (
     <>
       <color attach="background" args={['#07141e']} />
-      <fog attach="fog" args={['#07141e', 30, 62]} />
+      <fog attach="fog" args={['#07141e', 34, 70]} />
 
-      <ambientLight intensity={0.62} />
+      <ambientLight intensity={0.58} />
+      <hemisphereLight args={['#8ec8e8', '#172025', 0.72]} />
       <directionalLight
         castShadow
-        position={[12, 22, 10]}
-        intensity={1.8}
-        color="#d9efff"
+        position={[15, 24, 12]}
+        intensity={1.55}
+        color="#e0f2ff"
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
       />
-      <pointLight position={[-8, 7, 8]} intensity={18} distance={26} color="#7ed7ff" />
-      <pointLight position={[9, 5, 10]} intensity={10} distance={22} color="#ffd28a" />
+      <pointLight position={[-10, 8, 11]} intensity={12} distance={24} color="#78cfff" />
+      <pointLight position={[11, 6, -10]} intensity={8} distance={22} color="#ffd28a" />
 
       <RoadScene />
 
-      {/* Two heads for the controlled eastbound approach: near-side and far-side. */}
-      <TrafficLight3D traffic={traffic} position={TRAFFIC_GEOMETRY.mainSignalPosition} />
-      <TrafficLight3D traffic={traffic} position={farSignalPosition} />
+      {/* Four correctly placed approach signals */}
+      <TrafficLight3D traffic={traffic} position={westSignal} rotationY={Math.PI / 2} />
+      <TrafficLight3D traffic={traffic} position={eastSignal} rotationY={-Math.PI / 2} />
+      <TrafficLight3D traffic={crossTraffic} position={southSignal} rotationY={0} />
+      <TrafficLight3D traffic={crossTraffic} position={northSignal} rotationY={Math.PI} />
 
       <TrafficCars traffic={traffic} running={running} />
 
       <OrbitControls
         makeDefault
-        target={[0, 1.2, 0]}
+        target={[0, 0.9, 0]}
         enableDamping
         dampingFactor={0.075}
         enablePan
         enableRotate
         enableZoom
-        minDistance={10}
-        maxDistance={46}
+        minDistance={12}
+        maxDistance={52}
         maxPolarAngle={Math.PI / 2 - 0.08}
         panSpeed={0.9}
         rotateSpeed={0.65}
@@ -829,7 +868,7 @@ export function TrafficSimulation3D({ traffic, running }: TrafficSimulation3DPro
       <Canvas
         shadows
         dpr={[1, 1.6]}
-        camera={{ position: [18, 16, 24], fov: 50 }}
+        camera={{ position: [20, 19, 25], fov: 48 }}
         gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       >
         <Scene traffic={traffic} running={running} />
