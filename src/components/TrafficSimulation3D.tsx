@@ -10,7 +10,7 @@ import {
 } from '../simulation/trafficWorld'
 import type { TrafficState } from '../types'
 
-type VehicleModelSource = 'kenney' | 'mit'
+type VehicleModelSource = 'traffic-pack' | 'mit'
 
 type CarData = {
   id: number
@@ -30,7 +30,7 @@ type TrafficSimulation3DProps = {
 }
 
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
-const KINDS: VehicleKind[] = ['sedan', 'suv', 'hatch']
+const KINDS: VehicleKind[] = ['sedan', 'hatch', 'sports']
 
 function Wheel({ x, z }: { x: number; z: number }) {
   return (
@@ -111,41 +111,90 @@ function CarModel({
 
 
 const VEHICLE_MODEL_PATHS: Record<VehicleModelSource, string> = {
-  kenney: './models/vehicles/kenney-sedan.glb',
+  'traffic-pack': './models/vehicles/cc0-traffic-pack.glb',
   mit: './models/vehicles/mit-car.glb',
+}
+
+const PACK_NODE_BY_KIND: Record<VehicleKind, string> = {
+  sedan: 'veh/sedan',
+  hatch: 'veh/hatchback',
+  sports: 'veh/sports',
+}
+
+function polishVehicleMaterials(model: THREE.Object3D, paintColor: string) {
+  model.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+
+    child.castShadow = true
+    child.receiveShadow = true
+
+    const isWheel = /wheel/i.test(child.name) || /wheel/i.test(child.parent?.name ?? '')
+    const isBody = /body|door|spoiler|grill/i.test(child.name) || /body/i.test(child.parent?.name ?? '')
+
+    const originals = Array.isArray(child.material) ? child.material : [child.material]
+    child.material = originals.map((material) => {
+      if (!(material instanceof THREE.MeshStandardMaterial)) return material.clone()
+
+      if (isWheel) {
+        const wheelMaterial = material.clone()
+        wheelMaterial.roughness = Math.max(0.55, wheelMaterial.roughness)
+        wheelMaterial.metalness = Math.min(0.5, wheelMaterial.metalness)
+        return wheelMaterial
+      }
+
+      const physical = new THREE.MeshPhysicalMaterial({
+        color: isBody ? new THREE.Color(paintColor) : material.color.clone(),
+        map: material.map,
+        normalMap: material.normalMap,
+        roughnessMap: material.roughnessMap,
+        metalnessMap: material.metalnessMap,
+        aoMap: material.aoMap,
+        emissiveMap: material.emissiveMap,
+        transparent: material.transparent,
+        opacity: material.opacity,
+        side: material.side,
+        metalness: isBody ? 0.38 : material.metalness,
+        roughness: isBody ? 0.24 : Math.min(0.62, material.roughness),
+        clearcoat: isBody ? 0.78 : 0.18,
+        clearcoatRoughness: isBody ? 0.16 : 0.28,
+      })
+      physical.emissive.copy(material.emissive)
+      physical.emissiveIntensity = material.emissiveIntensity
+      return physical
+    })
+
+    if (!Array.isArray(child.material)) child.material = child.material[0] ?? child.material
+  })
 }
 
 function ImportedCarModel({
   source,
   kind,
+  color,
   braking,
 }: {
   source: VehicleModelSource
   kind: VehicleKind
+  color: string
   braking: boolean
 }) {
   const { scene } = useGLTF(VEHICLE_MODEL_PATHS[source])
 
   const normalized = useMemo(() => {
-    const model = scene.clone(true)
-    model.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true
-        child.receiveShadow = true
-        if (Array.isArray(child.material)) {
-          child.material = child.material.map((material) => material.clone())
-        } else if (child.material) {
-          child.material = child.material.clone()
-        }
-      }
-    })
+    const sourceObject =
+      source === 'traffic-pack'
+        ? scene.getObjectByName(PACK_NODE_BY_KIND[kind]) ?? scene
+        : scene
+
+    const model = sourceObject.clone(true)
+    polishVehicleMaterials(model, color)
 
     const bounds = new THREE.Box3().setFromObject(model)
     const size = bounds.getSize(new THREE.Vector3())
     const center = bounds.getCenter(new THREE.Vector3())
     const rawLength = Math.max(size.x, size.z, 0.001)
     const scale = VEHICLE_DIMENSIONS[kind].length / rawLength
-    const rotationY = size.z >= size.x ? Math.PI / 2 : 0
+    const rotationY = size.z > size.x ? Math.PI / 2 : 0
 
     return {
       model,
@@ -153,7 +202,7 @@ function ImportedCarModel({
       rotationY,
       offset: new THREE.Vector3(-center.x, -bounds.min.y, -center.z),
     }
-  }, [scene, kind])
+  }, [scene, source, kind, color])
 
   const dims = VEHICLE_DIMENSIONS[kind]
 
@@ -163,14 +212,13 @@ function ImportedCarModel({
         <primitive object={normalized.model} position={normalized.offset} />
       </group>
 
-      {/* Generic brake lights guarantee visible traffic feedback even when the source GLB has no emissive lamps. */}
       {[-0.31, 0.31].map((z) => (
-        <mesh key={z} position={[-dims.length * 0.505, 0.7, dims.width * z]}>
-          <boxGeometry args={[0.035, 0.12, 0.2]} />
+        <mesh key={z} position={[-dims.length * 0.505, 0.68, dims.width * z]}>
+          <boxGeometry args={[0.045, 0.14, 0.21]} />
           <meshStandardMaterial
             color="#ff3434"
             emissive="#ff2020"
-            emissiveIntensity={braking ? 4.5 : 0.8}
+            emissiveIntensity={braking ? 5 : 1}
           />
         </mesh>
       ))}
@@ -178,7 +226,7 @@ function ImportedCarModel({
   )
 }
 
-useGLTF.preload(VEHICLE_MODEL_PATHS.kenney)
+useGLTF.preload(VEHICLE_MODEL_PATHS['traffic-pack'])
 useGLTF.preload(VEHICLE_MODEL_PATHS.mit)
 
 function SignalHead({ traffic }: { traffic: TrafficState }) {
@@ -689,7 +737,7 @@ function TrafficCars({
       const car: CarData = {
         id,
         kind,
-        modelSource: id % 2 === 0 ? 'kenney' : 'mit',
+        modelSource: id % 5 === 0 ? 'mit' : 'traffic-pack',
         color: COLORS[id % COLORS.length],
         x: TRAFFIC_WORLD.spawnX,
         speed: 0,
@@ -768,7 +816,7 @@ function TrafficCars({
           position={[car.x, 0.02, TRAFFIC_WORLD.eastboundLaneZ]}
         >
           <Suspense fallback={<CarModel kind={car.kind} color={car.color} braking={car.braking} />}>
-            <ImportedCarModel source={car.modelSource} kind={car.kind} braking={car.braking} />
+            <ImportedCarModel source={car.modelSource} kind={car.kind} color={car.color} braking={car.braking} />
           </Suspense>
         </group>
       ))}
