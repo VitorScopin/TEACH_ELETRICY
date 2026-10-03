@@ -131,8 +131,9 @@ function polishVehicleMaterials(model: THREE.Object3D, paintColor: string) {
     const isWheel = /wheel/i.test(child.name) || /wheel/i.test(child.parent?.name ?? '')
     const isBody = /body|door|spoiler|grill/i.test(child.name) || /body/i.test(child.parent?.name ?? '')
 
-    const originals = Array.isArray(child.material) ? child.material : [child.material]
-    child.material = originals.map((material) => {
+    const wasArray = Array.isArray(child.material)
+    const originals = wasArray ? child.material : [child.material]
+    const polished = originals.map((material) => {
       if (!(material instanceof THREE.MeshStandardMaterial)) return material.clone()
 
       if (isWheel) {
@@ -163,7 +164,7 @@ function polishVehicleMaterials(model: THREE.Object3D, paintColor: string) {
       return physical
     })
 
-    if (!Array.isArray(child.material)) child.material = child.material[0] ?? child.material
+    child.material = wasArray ? polished : polished[0]
   })
 }
 
