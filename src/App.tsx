@@ -148,6 +148,11 @@ function App() {
     (safeNow ? 20 : 0) + seenStates.size * 10 + timingPass.size * 10 + (sequencePass ? 20 : 0),
   )
 
+  const activeStep = activeLights.length === 1
+    ? steps.find((step) => step.key === activeLights[0])
+    : undefined
+  const phaseDurationSec = (activeStep?.durationMs ?? 5000) / 1000
+
   const connect = async () => {
     setMode('plc')
     setConnectionMessage('Conectando ao PLC...')
@@ -275,7 +280,12 @@ function App() {
           <section className="workspace-grid">
             <section className="simulation-card panel">
               <div className="city-lab city-lab-3d">
-                <TrafficSimulation3D traffic={traffic} running={running} />
+                <TrafficSimulation3D
+                  traffic={traffic}
+                  running={running}
+                  phaseElapsed={phaseElapsed}
+                  phaseDuration={phaseDurationSec}
+                />
 
                 <div className="telemetry-overlay">
                   <div><span>Estado Atual</span><strong><i className={`state-led ${activeLight}`} />{stateLabel[activeLight]}</strong></div>
