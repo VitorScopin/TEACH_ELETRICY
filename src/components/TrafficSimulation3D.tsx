@@ -29,84 +29,6 @@ type TrafficSimulation3DProps = {
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
 const KINDS: VehicleKind[] = ['sedan']
 
-function Wheel({ x, z }: { x: number; z: number }) {
-  return (
-    <group position={[x, 0.38, z]} rotation={[Math.PI / 2, 0, 0]} userData={{ wheel: true }}>
-      <mesh castShadow>
-        <cylinderGeometry args={[0.34, 0.34, 0.24, 20]} />
-        <meshStandardMaterial color="#0b0f12" roughness={0.92} />
-      </mesh>
-      <mesh position={[0, 0.125, 0]}>
-        <cylinderGeometry args={[0.16, 0.16, 0.25, 16]} />
-        <meshStandardMaterial color="#65727a" metalness={0.65} roughness={0.32} />
-      </mesh>
-    </group>
-  )
-}
-
-function CarModel({
-  kind,
-  color,
-  braking,
-}: {
-  kind: VehicleKind
-  color: string
-  braking: boolean
-}) {
-  const dims = VEHICLE_DIMENSIONS[kind]
-  const wheelX = dims.length * 0.31
-  const wheelZ = dims.width * 0.47
-  const bodyY = 0.68
-  const cabinY = bodyY + dims.bodyH * 0.72
-
-  return (
-    <group>
-      <mesh castShadow receiveShadow position={[0, bodyY, 0]}>
-        <boxGeometry args={[dims.length, dims.bodyH, dims.width]} />
-        <meshStandardMaterial color={color} metalness={0.42} roughness={0.34} />
-      </mesh>
-
-      <mesh castShadow position={[-0.16, cabinY, 0]}>
-        <boxGeometry args={[dims.cabinL, dims.cabinH, dims.width * 0.86]} />
-        <meshStandardMaterial color={color} metalness={0.32} roughness={0.28} />
-      </mesh>
-
-      <mesh position={[0.02, cabinY + 0.02, dims.width * 0.435]}>
-        <boxGeometry args={[dims.cabinL * 0.68, dims.cabinH * 0.48, 0.025]} />
-        <meshStandardMaterial color="#18313f" transparent opacity={0.84} roughness={0.1} />
-      </mesh>
-      <mesh position={[0.02, cabinY + 0.02, -dims.width * 0.435]}>
-        <boxGeometry args={[dims.cabinL * 0.68, dims.cabinH * 0.48, 0.025]} />
-        <meshStandardMaterial color="#18313f" transparent opacity={0.84} roughness={0.1} />
-      </mesh>
-
-      {[-0.31, 0.31].map((z) => (
-        <mesh key={`head-${z}`} position={[dims.length * 0.505, bodyY, dims.width * z]}>
-          <boxGeometry args={[0.045, 0.17, 0.24]} />
-          <meshStandardMaterial color="#fff3bd" emissive="#ffe49a" emissiveIntensity={1.9} />
-        </mesh>
-      ))}
-
-      {[-0.31, 0.31].map((z) => (
-        <mesh key={`tail-${z}`} position={[-dims.length * 0.505, bodyY, dims.width * z]}>
-          <boxGeometry args={[0.045, 0.17, 0.24]} />
-          <meshStandardMaterial
-            color="#ff3838"
-            emissive="#ff2020"
-            emissiveIntensity={braking ? 4.2 : 1.1}
-          />
-        </mesh>
-      ))}
-
-      <Wheel x={wheelX} z={wheelZ} />
-      <Wheel x={wheelX} z={-wheelZ} />
-      <Wheel x={-wheelX} z={wheelZ} />
-      <Wheel x={-wheelX} z={-wheelZ} />
-    </group>
-  )
-}
-
-
 const REALISTIC_CAR_URL =
   'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CarConcept/glTF-Binary/CarConcept.glb'
 
@@ -780,7 +702,7 @@ function TrafficCars({
           }}
           position={[car.x, 0.02, TRAFFIC_WORLD.eastboundLaneZ]}
         >
-          <Suspense fallback={<CarModel kind={car.kind} color={car.color} braking={car.braking} />}>
+          <Suspense fallback={null}>
             <RealisticCarModel color={car.color} braking={car.braking} />
           </Suspense>
         </group>
