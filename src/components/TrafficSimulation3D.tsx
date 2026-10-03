@@ -111,8 +111,8 @@ function CarModel({
 
 
 const VEHICLE_MODEL_PATHS: Record<VehicleModelSource, string> = {
-  kenney: '/models/vehicles/kenney-sedan.glb',
-  mit: '/models/vehicles/mit-car.glb',
+  kenney: `${import.meta.env.BASE_URL}models/vehicles/kenney-sedan.glb`,
+  mit: `${import.meta.env.BASE_URL}models/vehicles/mit-car.glb`,
 }
 
 function ImportedCarModel({
