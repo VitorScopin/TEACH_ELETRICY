@@ -10,12 +10,9 @@ import {
 } from '../simulation/trafficWorld'
 import type { TrafficState } from '../types'
 
-type VehicleModelSource = 'traffic-pack' | 'mit'
-
 type CarData = {
   id: number
   kind: VehicleKind
-  modelSource: VehicleModelSource
   color: string
   x: number
   speed: number
@@ -30,7 +27,7 @@ type TrafficSimulation3DProps = {
 }
 
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
-const KINDS: VehicleKind[] = ['sedan', 'hatch', 'sports']
+const KINDS: VehicleKind[] = ['sedan']
 
 function Wheel({ x, z }: { x: number; z: number }) {
   return (
@@ -110,91 +107,73 @@ function CarModel({
 }
 
 
-const VEHICLE_MODEL_PATHS: Record<VehicleModelSource, string> = {
-  'traffic-pack': './models/vehicles/cc0-traffic-pack.glb',
-  mit: './models/vehicles/mit-car.glb',
-}
+const REALISTIC_CAR_URL =
+  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CarConcept/glTF-Binary/CarConcept.glb'
 
-const PACK_NODE_BY_KIND: Record<VehicleKind, string> = {
-  sedan: 'veh/sedan',
-  hatch: 'veh/hatchback',
-  sports: 'veh/sports',
-}
-
-function polishVehicleMaterials(model: THREE.Object3D, paintColor: string) {
-  model.traverse((child) => {
-    if (!(child instanceof THREE.Mesh)) return
-
-    child.castShadow = true
-    child.receiveShadow = true
-
-    const isWheel = /wheel/i.test(child.name) || /wheel/i.test(child.parent?.name ?? '')
-    const isBody = /body|door|spoiler|grill/i.test(child.name) || /body/i.test(child.parent?.name ?? '')
-
-    const wasArray = Array.isArray(child.material)
-    const originals = wasArray ? child.material : [child.material]
-    const polished = originals.map((material) => {
-      if (!(material instanceof THREE.MeshStandardMaterial)) return material.clone()
-
-      if (isWheel) {
-        const wheelMaterial = material.clone()
-        wheelMaterial.roughness = Math.max(0.55, wheelMaterial.roughness)
-        wheelMaterial.metalness = Math.min(0.5, wheelMaterial.metalness)
-        return wheelMaterial
-      }
-
-      const physical = new THREE.MeshPhysicalMaterial({
-        color: isBody ? new THREE.Color(paintColor) : material.color.clone(),
-        map: material.map,
-        normalMap: material.normalMap,
-        roughnessMap: material.roughnessMap,
-        metalnessMap: material.metalnessMap,
-        aoMap: material.aoMap,
-        emissiveMap: material.emissiveMap,
-        transparent: material.transparent,
-        opacity: material.opacity,
-        side: material.side,
-        metalness: isBody ? 0.38 : material.metalness,
-        roughness: isBody ? 0.24 : Math.min(0.62, material.roughness),
-        clearcoat: isBody ? 0.78 : 0.18,
-        clearcoatRoughness: isBody ? 0.16 : 0.28,
-      })
-      physical.emissive.copy(material.emissive)
-      physical.emissiveIntensity = material.emissiveIntensity
-      return physical
-    })
-
-    child.material = wasArray ? polished : (polished[0] ?? originals[0])
-  })
-}
-
-function ImportedCarModel({
-  source,
-  kind,
+function RealisticCarModel({
   color,
   braking,
 }: {
-  source: VehicleModelSource
-  kind: VehicleKind
   color: string
   braking: boolean
 }) {
-  const { scene } = useGLTF(VEHICLE_MODEL_PATHS[source])
+  const { scene } = useGLTF(REALISTIC_CAR_URL)
 
   const normalized = useMemo(() => {
-    const sourceObject =
-      source === 'traffic-pack'
-        ? scene.getObjectByName(PACK_NODE_BY_KIND[kind]) ?? scene
-        : scene
+    const model = scene.clone(true)
 
-    const model = sourceObject.clone(true)
-    polishVehicleMaterials(model, color)
+    model.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) {
+        if (/^Wheel/i.test(child.name)) child.userData.wheel = true
+        return
+      }
+
+      child.castShadow = true
+      child.receiveShadow = true
+
+      const originalMaterials = Array.isArray(child.material) ? child.material : [child.material]
+      const clonedMaterials = originalMaterials.map((material) => {
+        const clone = material.clone()
+
+        if (clone instanceof THREE.MeshStandardMaterial) {
+          const materialName = clone.name ?? ''
+
+          if (/^Paint\s/i.test(materialName)) {
+            clone.color = new THREE.Color(color)
+            clone.metalness = Math.max(clone.metalness, 0.45)
+            clone.roughness = Math.min(clone.roughness, 0.24)
+
+            if (clone instanceof THREE.MeshPhysicalMaterial) {
+              clone.clearcoat = Math.max(clone.clearcoat, 0.82)
+              clone.clearcoatRoughness = Math.min(clone.clearcoatRoughness, 0.16)
+            }
+          }
+
+          if (/Brakelight/i.test(materialName)) {
+            clone.emissive = new THREE.Color('#ff2020')
+            clone.emissiveIntensity = braking ? 6.5 : 1.5
+          }
+
+          if (/Headlight/i.test(materialName)) {
+            clone.emissiveIntensity = Math.max(clone.emissiveIntensity, 2.2)
+          }
+        }
+
+        return clone
+      })
+
+      child.material = Array.isArray(child.material)
+        ? clonedMaterials
+        : (clonedMaterials[0] ?? child.material)
+    })
 
     const bounds = new THREE.Box3().setFromObject(model)
     const size = bounds.getSize(new THREE.Vector3())
     const center = bounds.getCenter(new THREE.Vector3())
+
+    const targetLength = VEHICLE_DIMENSIONS.sedan.length
     const rawLength = Math.max(size.x, size.z, 0.001)
-    const scale = VEHICLE_DIMENSIONS[kind].length / rawLength
+    const scale = targetLength / rawLength
     const rotationY = size.z > size.x ? Math.PI / 2 : 0
 
     return {
@@ -203,32 +182,18 @@ function ImportedCarModel({
       rotationY,
       offset: new THREE.Vector3(-center.x, -bounds.min.y, -center.z),
     }
-  }, [scene, source, kind, color])
-
-  const dims = VEHICLE_DIMENSIONS[kind]
+  }, [scene, color, braking])
 
   return (
     <group>
       <group rotation={[0, normalized.rotationY, 0]} scale={normalized.scale}>
         <primitive object={normalized.model} position={normalized.offset} />
       </group>
-
-      {[-0.31, 0.31].map((z) => (
-        <mesh key={z} position={[-dims.length * 0.505, 0.68, dims.width * z]}>
-          <boxGeometry args={[0.045, 0.14, 0.21]} />
-          <meshStandardMaterial
-            color="#ff3434"
-            emissive="#ff2020"
-            emissiveIntensity={braking ? 5 : 1}
-          />
-        </mesh>
-      ))}
     </group>
   )
 }
 
-useGLTF.preload(VEHICLE_MODEL_PATHS['traffic-pack'])
-useGLTF.preload(VEHICLE_MODEL_PATHS.mit)
+useGLTF.preload(REALISTIC_CAR_URL)
 
 function SignalHead({ traffic }: { traffic: TrafficState }) {
   const lamps = [
@@ -738,7 +703,6 @@ function TrafficCars({
       const car: CarData = {
         id,
         kind,
-        modelSource: id % 5 === 0 ? 'mit' : 'traffic-pack',
         color: COLORS[id % COLORS.length],
         x: TRAFFIC_WORLD.spawnX,
         speed: 0,
@@ -817,7 +781,7 @@ function TrafficCars({
           position={[car.x, 0.02, TRAFFIC_WORLD.eastboundLaneZ]}
         >
           <Suspense fallback={<CarModel kind={car.kind} color={car.color} braking={car.braking} />}>
-            <ImportedCarModel source={car.modelSource} kind={car.kind} color={car.color} braking={car.braking} />
+            <RealisticCarModel color={car.color} braking={car.braking} />
           </Suspense>
         </group>
       ))}
