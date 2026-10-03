@@ -7,6 +7,11 @@ export const TRAFFIC_WORLD = {
   stopLineOffset: 1,
   shoulderOffset: 0.8,
   roadLength: 64,
+  worldDepth: 46,
+  sidewalkWidth: 5.5,
+  sidewalkHeight: 0.18,
+  curbHeight: 0.22,
+  curbWidth: 0.28,
   spawnX: -31,
   exitX: 31,
   eastboundLaneZ: 1.75,
@@ -57,6 +62,9 @@ export const TRAFFIC_GEOMETRY = {
       TRAFFIC_WORLD.crosswalkWidth +
       TRAFFIC_WORLD.stopLineOffset
     )
+  },
+  get cornerInset() {
+    return TRAFFIC_WORLD.roadWidth / 2 + TRAFFIC_WORLD.sidewalkWidth / 2
   },
   get mainSignalPosition(): [number, number, number] {
     return [
