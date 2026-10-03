@@ -264,10 +264,12 @@ function Building({
 function CityBlocks() {
   const blocks = useMemo(
     () => [
-      { position: [-14, 2.6, -12] as [number, number, number], size: [4.5, 5.2, 4.2] as [number, number, number] },
-      { position: [-8.8, 3.8, -13] as [number, number, number], size: [3.2, 7.6, 3.6] as [number, number, number] },
-      { position: [9.5, 3.2, -13] as [number, number, number], size: [4.2, 6.4, 4.0] as [number, number, number] },
-      { position: [15, 2.8, -12] as [number, number, number], size: [3.8, 5.6, 4.5] as [number, number, number] },
+      { position: [-18, 3.4, -16] as [number, number, number], size: [6.2, 6.8, 5.4] as [number, number, number] },
+      { position: [-11, 4.6, -16.5] as [number, number, number], size: [4.2, 9.2, 4.8] as [number, number, number] },
+      { position: [11.5, 4.1, -16.5] as [number, number, number], size: [5.2, 8.2, 4.8] as [number, number, number] },
+      { position: [18, 3.2, -15.5] as [number, number, number], size: [5.8, 6.4, 5.4] as [number, number, number] },
+      { position: [-18, 3.0, 16] as [number, number, number], size: [5.5, 6, 5.2] as [number, number, number] },
+      { position: [17, 4.0, 16] as [number, number, number], size: [6.4, 8, 5.2] as [number, number, number] },
     ],
     [],
   )
@@ -284,16 +286,18 @@ function CityBlocks() {
 function RoadMark({
   position,
   size,
-  color = '#e7e8e1',
+  color = '#eceeea',
+  rotationY = 0,
 }: {
   position: [number, number, number]
   size: [number, number]
   color?: string
+  rotationY?: number
 }) {
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={position}>
+    <mesh rotation={[-Math.PI / 2, 0, rotationY]} position={position}>
       <planeGeometry args={size} />
-      <meshBasicMaterial color={color} />
+      <meshBasicMaterial color={color} toneMapped={false} />
     </mesh>
   )
 }
@@ -305,24 +309,29 @@ function ZebraCrossing({
   axis: 'x' | 'z'
   center: number
 }) {
-  const stripeCount = 8
-  const stripeWidth = TRAFFIC_WORLD.crosswalkWidth / stripeCount
+  const stripeCount = 9
+  const stripeGap = 0.18
+  const stripeWidth = (TRAFFIC_WORLD.crosswalkWidth - stripeGap * (stripeCount - 1)) / stripeCount
 
   return (
     <>
       {Array.from({ length: stripeCount }).map((_, i) => {
-        const offset = -TRAFFIC_WORLD.crosswalkWidth / 2 + stripeWidth / 2 + i * stripeWidth
+        const offset =
+          -TRAFFIC_WORLD.crosswalkWidth / 2 +
+          stripeWidth / 2 +
+          i * (stripeWidth + stripeGap)
+
         return axis === 'x' ? (
           <RoadMark
             key={i}
-            position={[center + offset, 0.036, 0]}
-            size={[stripeWidth * 0.54, TRAFFIC_WORLD.roadWidth - 0.9]}
+            position={[center + offset, 0.045, 0]}
+            size={[stripeWidth, TRAFFIC_WORLD.roadWidth - 0.7]}
           />
         ) : (
           <RoadMark
             key={i}
-            position={[0, 0.036, center + offset]}
-            size={[TRAFFIC_WORLD.roadWidth - 0.9, stripeWidth * 0.54]}
+            position={[0, 0.045, center + offset]}
+            size={[TRAFFIC_WORLD.roadWidth - 0.7, stripeWidth]}
           />
         )
       })}
@@ -330,89 +339,309 @@ function ZebraCrossing({
   )
 }
 
+function ArrowMark({
+  position,
+  rotationY,
+}: {
+  position: [number, number, number]
+  rotationY: number
+}) {
+  const material = <meshBasicMaterial color="#eceeea" toneMapped={false} />
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      <mesh position={[0, 0.038, 0]}>
+        <boxGeometry args={[1.65, 0.025, 0.18]} />
+        {material}
+      </mesh>
+      <mesh position={[0.72, 0.04, 0.27]} rotation={[0, Math.PI / 4, 0]}>
+        <boxGeometry args={[0.82, 0.025, 0.18]} />
+        {material}
+      </mesh>
+      <mesh position={[0.72, 0.04, -0.27]} rotation={[0, -Math.PI / 4, 0]}>
+        <boxGeometry args={[0.82, 0.025, 0.18]} />
+        {material}
+      </mesh>
+    </group>
+  )
+}
+
+function SidewalkCorner({
+  x,
+  z,
+}: {
+  x: number
+  z: number
+}) {
+  const sx = (TRAFFIC_WORLD.roadLength - TRAFFIC_WORLD.roadWidth) / 2
+  const sz = (TRAFFIC_WORLD.worldDepth - TRAFFIC_WORLD.roadWidth) / 2
+  const centerX = x * (TRAFFIC_WORLD.roadWidth / 2 + sx / 2)
+  const centerZ = z * (TRAFFIC_WORLD.roadWidth / 2 + sz / 2)
+
+  return (
+    <group>
+      <mesh receiveShadow castShadow position={[centerX, TRAFFIC_WORLD.sidewalkHeight / 2, centerZ]}>
+        <boxGeometry args={[sx, TRAFFIC_WORLD.sidewalkHeight, sz]} />
+        <meshStandardMaterial color="#73797a" roughness={0.94} />
+      </mesh>
+
+      {/* curb edges along both road faces */}
+      <mesh
+        castShadow
+        position={[
+          x * (TRAFFIC_WORLD.roadWidth / 2 + TRAFFIC_WORLD.curbWidth / 2),
+          TRAFFIC_WORLD.curbHeight / 2,
+          centerZ,
+        ]}
+      >
+        <boxGeometry args={[TRAFFIC_WORLD.curbWidth, TRAFFIC_WORLD.curbHeight, sz]} />
+        <meshStandardMaterial color="#9ca0a0" roughness={0.9} />
+      </mesh>
+      <mesh
+        castShadow
+        position={[
+          centerX,
+          TRAFFIC_WORLD.curbHeight / 2,
+          z * (TRAFFIC_WORLD.roadWidth / 2 + TRAFFIC_WORLD.curbWidth / 2),
+        ]}
+      >
+        <boxGeometry args={[sx, TRAFFIC_WORLD.curbHeight, TRAFFIC_WORLD.curbWidth]} />
+        <meshStandardMaterial color="#9ca0a0" roughness={0.9} />
+      </mesh>
+
+      {/* subtle tile joints */}
+      {[-2.4, 0, 2.4].map((offset) => (
+        <mesh
+          key={`x-${offset}`}
+          position={[centerX, TRAFFIC_WORLD.sidewalkHeight + 0.006, centerZ + offset]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <planeGeometry args={[sx - 0.5, 0.025]} />
+          <meshBasicMaterial color="#555c5d" transparent opacity={0.38} />
+        </mesh>
+      ))}
+      {[-3.4, 0, 3.4].map((offset) => (
+        <mesh
+          key={`z-${offset}`}
+          position={[centerX + offset, TRAFFIC_WORLD.sidewalkHeight + 0.006, centerZ]}
+          rotation={[-Math.PI / 2, 0, Math.PI / 2]}
+        >
+          <planeGeometry args={[sz - 0.5, 0.025]} />
+          <meshBasicMaterial color="#555c5d" transparent opacity={0.38} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function CornerCurb({
+  x,
+  z,
+  rotationY,
+}: {
+  x: number
+  z: number
+  rotationY: number
+}) {
+  return (
+    <mesh
+      position={[
+        x * (TRAFFIC_WORLD.roadWidth / 2 + 1.15),
+        TRAFFIC_WORLD.curbHeight / 2,
+        z * (TRAFFIC_WORLD.roadWidth / 2 + 1.15),
+      ]}
+      rotation={[Math.PI / 2, rotationY, 0]}
+      castShadow
+    >
+      <torusGeometry args={[1.15, 0.14, 8, 24, Math.PI / 2]} />
+      <meshStandardMaterial color="#a5a7a5" roughness={0.9} />
+    </mesh>
+  )
+}
+
+function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+  return (
+    <group position={position} scale={scale}>
+      <mesh castShadow position={[0, 1.0, 0]}>
+        <cylinderGeometry args={[0.12, 0.17, 2, 10]} />
+        <meshStandardMaterial color="#4c3322" roughness={1} />
+      </mesh>
+      <mesh castShadow position={[0, 2.35, 0]}>
+        <sphereGeometry args={[1.0, 12, 10]} />
+        <meshStandardMaterial color="#173e2b" roughness={0.95} />
+      </mesh>
+      <mesh castShadow position={[0.55, 2.3, 0.15]}>
+        <sphereGeometry args={[0.65, 10, 8]} />
+        <meshStandardMaterial color="#205038" roughness={0.95} />
+      </mesh>
+    </group>
+  )
+}
+
+function Planter({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh receiveShadow castShadow position={[0, 0.24, 0]}>
+        <boxGeometry args={[1.45, 0.48, 1.45]} />
+        <meshStandardMaterial color="#4d5557" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.5, 0]}>
+        <boxGeometry args={[1.15, 0.14, 1.15]} />
+        <meshStandardMaterial color="#243126" roughness={1} />
+      </mesh>
+      <mesh castShadow position={[0, 1.0, 0]}>
+        <sphereGeometry args={[0.62, 10, 8]} />
+        <meshStandardMaterial color="#21492f" roughness={0.95} />
+      </mesh>
+    </group>
+  )
+}
+
+function StreetLamp({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh castShadow position={[0, 1.75, 0]}>
+        <cylinderGeometry args={[0.045, 0.065, 3.5, 10]} />
+        <meshStandardMaterial color="#252d32" metalness={0.72} roughness={0.35} />
+      </mesh>
+      <mesh castShadow position={[0, 3.48, 0]}>
+        <sphereGeometry args={[0.14, 12, 10]} />
+        <meshStandardMaterial color="#fff1c2" emissive="#ffd78a" emissiveIntensity={2.8} />
+      </mesh>
+      <pointLight position={[0, 3.35, 0]} intensity={5} distance={8} color="#ffd990" />
+    </group>
+  )
+}
+
+function UrbanProps() {
+  return (
+    <>
+      <Tree position={[-14, 0.18, -10.8]} scale={0.95} />
+      <Tree position={[14.5, 0.18, -10.5]} scale={0.9} />
+      <Tree position={[-14.5, 0.18, 11.2]} scale={0.9} />
+      <Tree position={[14, 0.18, 11]} scale={1.0} />
+
+      <Planter position={[-10.5, 0.18, -10.6]} />
+      <Planter position={[10.8, 0.18, -10.4]} />
+      <Planter position={[-10.7, 0.18, 10.4]} />
+      <Planter position={[10.5, 0.18, 10.5]} />
+
+      <StreetLamp position={[-12.4, 0.18, -8.8]} />
+      <StreetLamp position={[12.6, 0.18, -8.8]} />
+      <StreetLamp position={[-12.5, 0.18, 8.9]} />
+      <StreetLamp position={[12.5, 0.18, 8.9]} />
+    </>
+  )
+}
+
 function RoadScene() {
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
-  const halfLength = TRAFFIC_WORLD.roadLength / 2
-  const dashPositions = [-29, -25, -21, -17, -13, 13, 17, 21, 25, 29]
+  const lane = TRAFFIC_WORLD.laneWidth
+  const dashX = [-29, -25, -21, -17, -13, 13, 17, 21, 25, 29]
+  const dashZ = [-20, -16, -12, 12, 16, 20]
 
   return (
     <>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]}>
-        <planeGeometry args={[70, 46]} />
-        <meshStandardMaterial color="#0d161b" roughness={0.98} />
+      {/* World base */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.07, 0]}>
+        <planeGeometry args={[70, TRAFFIC_WORLD.worldDepth]} />
+        <meshStandardMaterial color="#10191e" roughness={0.99} />
       </mesh>
 
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]}>
+      {/* Asphalt roads crossing at 90 degrees */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[TRAFFIC_WORLD.roadLength, TRAFFIC_WORLD.roadWidth]} />
-        <meshStandardMaterial color="#282e31" roughness={0.88} metalness={0.03} />
+        <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
       </mesh>
-
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
-        <planeGeometry args={[TRAFFIC_WORLD.roadWidth, 46]} />
-        <meshStandardMaterial color="#282e31" roughness={0.88} metalness={0.03} />
+        <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.worldDepth]} />
+        <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
       </mesh>
 
-      {/* Sidewalk blocks */}
-      {[
-        [-halfLength / 2, 0.06, halfRoad + 1.4, halfLength, 2.6],
-        [halfLength / 2, 0.06, halfRoad + 1.4, halfLength, 2.6],
-        [-halfLength / 2, 0.06, -halfRoad - 1.4, halfLength, 2.6],
-        [halfLength / 2, 0.06, -halfRoad - 1.4, halfLength, 2.6],
-      ].map(([x, y, z, sx, sz], i) => (
-        <mesh key={i} receiveShadow position={[x, y, z]}>
-          <boxGeometry args={[sx, 0.12, sz]} />
-          <meshStandardMaterial color="#5a6164" roughness={0.95} />
-        </mesh>
-      ))}
+      {/* Four independent sidewalk quadrants */}
+      <SidewalkCorner x={-1} z={-1} />
+      <SidewalkCorner x={1} z={-1} />
+      <SidewalkCorner x={-1} z={1} />
+      <SidewalkCorner x={1} z={1} />
 
-      {/* Double yellow center line */}
-      {[-0.12, 0.12].map((z, lineIndex) => (
-        <group key={lineIndex}>
-          <RoadMark position={[-19.5, 0.025, z]} size={[25, 0.075]} color="#e1c34c" />
-          <RoadMark position={[19.5, 0.025, z]} size={[25, 0.075]} color="#e1c34c" />
+      <CornerCurb x={-1} z={-1} rotationY={0} />
+      <CornerCurb x={1} z={-1} rotationY={Math.PI / 2} />
+      <CornerCurb x={1} z={1} rotationY={Math.PI} />
+      <CornerCurb x={-1} z={1} rotationY={Math.PI * 1.5} />
+
+      {/* Double yellow center lines, interrupted before the crosswalk/intersection zone */}
+      {[-0.13, 0.13].map((z) => (
+        <group key={`hy-${z}`}>
+          <RoadMark position={[-21.5, 0.036, z]} size={[21, 0.09]} color="#e4bf3d" />
+          <RoadMark position={[21.5, 0.036, z]} size={[21, 0.09]} color="#e4bf3d" />
+        </group>
+      ))}
+      {[-0.13, 0.13].map((x) => (
+        <group key={`vy-${x}`}>
+          <RoadMark position={[x, 0.037, -16.5]} size={[19, 0.09]} color="#e4bf3d" rotationY={Math.PI / 2} />
+          <RoadMark position={[x, 0.037, 16.5]} size={[19, 0.09]} color="#e4bf3d" rotationY={Math.PI / 2} />
         </group>
       ))}
 
-      {/* Lane separators */}
-      {[-TRAFFIC_WORLD.laneWidth, TRAFFIC_WORLD.laneWidth].map((z) =>
-        dashPositions.map((x, i) => (
-          <RoadMark key={`${z}-${i}`} position={[x, 0.027, z]} size={[1.9, 0.075]} />
+      {/* Dashed white lane dividers */}
+      {[-lane, lane].map((z) =>
+        dashX.map((x) => (
+          <RoadMark key={`hd-${z}-${x}`} position={[x, 0.038, z]} size={[1.9, 0.08]} />
+        )),
+      )}
+      {[-lane, lane].map((x) =>
+        dashZ.map((z) => (
+          <RoadMark
+            key={`vd-${x}-${z}`}
+            position={[x, 0.039, z]}
+            size={[1.9, 0.08]}
+            rotationY={Math.PI / 2}
+          />
         )),
       )}
 
-      {/* Edge lines */}
-      <RoadMark position={[0, 0.025, halfRoad - 0.12]} size={[TRAFFIC_WORLD.roadLength, 0.09]} />
-      <RoadMark position={[0, 0.025, -halfRoad + 0.12]} size={[TRAFFIC_WORLD.roadLength, 0.09]} />
+      {/* Solid road edge lines */}
+      <RoadMark position={[0, 0.037, halfRoad - 0.14]} size={[TRAFFIC_WORLD.roadLength, 0.1]} />
+      <RoadMark position={[0, 0.037, -halfRoad + 0.14]} size={[TRAFFIC_WORLD.roadLength, 0.1]} />
+      <RoadMark position={[halfRoad - 0.14, 0.038, 0]} size={[TRAFFIC_WORLD.worldDepth, 0.1]} rotationY={Math.PI / 2} />
+      <RoadMark position={[-halfRoad + 0.14, 0.038, 0]} size={[TRAFFIC_WORLD.worldDepth, 0.1]} rotationY={Math.PI / 2} />
 
-      {/* Stop lines */}
+      {/* Stop bars on the approach side of each crosswalk */}
       <RoadMark
-        position={[TRAFFIC_GEOMETRY.westStopLineX, 0.04, TRAFFIC_WORLD.roadWidth / 4]}
-        size={[0.18, TRAFFIC_WORLD.roadWidth / 2 - 0.35]}
+        position={[TRAFFIC_GEOMETRY.westStopLineX, 0.052, halfRoad / 2]}
+        size={[0.24, halfRoad - 0.45]}
       />
       <RoadMark
-        position={[TRAFFIC_GEOMETRY.eastStopLineX, 0.04, -TRAFFIC_WORLD.roadWidth / 4]}
-        size={[0.18, TRAFFIC_WORLD.roadWidth / 2 - 0.35]}
+        position={[TRAFFIC_GEOMETRY.eastStopLineX, 0.052, -halfRoad / 2]}
+        size={[0.24, halfRoad - 0.45]}
       />
       <RoadMark
-        position={[-TRAFFIC_WORLD.roadWidth / 4, 0.041, TRAFFIC_GEOMETRY.southStopLineZ]}
-        size={[TRAFFIC_WORLD.roadWidth / 2 - 0.35, 0.18]}
+        position={[-halfRoad / 2, 0.053, TRAFFIC_GEOMETRY.southStopLineZ]}
+        size={[halfRoad - 0.45, 0.24]}
       />
       <RoadMark
-        position={[TRAFFIC_WORLD.roadWidth / 4, 0.041, TRAFFIC_GEOMETRY.northStopLineZ]}
-        size={[TRAFFIC_WORLD.roadWidth / 2 - 0.35, 0.18]}
+        position={[halfRoad / 2, 0.053, TRAFFIC_GEOMETRY.northStopLineZ]}
+        size={[halfRoad - 0.45, 0.24]}
       />
 
+      {/* Four zebra crossings */}
       <ZebraCrossing axis="x" center={TRAFFIC_GEOMETRY.westCrosswalkCenterX} />
       <ZebraCrossing axis="x" center={TRAFFIC_GEOMETRY.eastCrosswalkCenterX} />
       <ZebraCrossing axis="z" center={TRAFFIC_GEOMETRY.southCrosswalkCenterZ} />
       <ZebraCrossing axis="z" center={TRAFFIC_GEOMETRY.northCrosswalkCenterZ} />
 
-      {/* Clean central intersection */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.008, 0]}>
+      {/* Through arrows before each stop line */}
+      <ArrowMark position={[TRAFFIC_GEOMETRY.westStopLineX - 4.0, 0, TRAFFIC_WORLD.eastboundLaneZ]} rotationY={0} />
+      <ArrowMark position={[TRAFFIC_GEOMETRY.eastStopLineX + 4.0, 0, TRAFFIC_WORLD.westboundLaneZ]} rotationY={Math.PI} />
+      <ArrowMark position={[-TRAFFIC_WORLD.eastboundLaneZ, 0, TRAFFIC_GEOMETRY.southStopLineZ - 4.0]} rotationY={-Math.PI / 2} />
+      <ArrowMark position={[TRAFFIC_WORLD.eastboundLaneZ, 0, TRAFFIC_GEOMETRY.northStopLineZ + 4.0]} rotationY={Math.PI / 2} />
+
+      {/* Clean center asphalt patch over line fragments */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
         <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.roadWidth]} />
-        <meshStandardMaterial color="#252b2e" roughness={0.88} metalness={0.02} />
+        <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} />
       </mesh>
 
+      <UrbanProps />
       <CityBlocks />
     </>
   )
