@@ -31,3 +31,19 @@ The model is redistributed under those MIT terms. See the upstream model license
 `3dviewer/assets/models/README.md`
 
 These files are kept as separate render assets. TEACH ELETRICY's traffic logic remains independent of the model geometry.
+
+
+## cc0-traffic-pack.glb
+
+Source repository: https://github.com/fastrouter/experiments-costa-vista
+
+The source project's `ATTRIBUTION.md` documents the car assets in this pack as based on the Kenney Car Kit and Kenney Toy Car Kit.
+
+License: Creative Commons Zero (CC0 1.0 Universal)
+
+Models used by TEACH ELETRICY:
+- `veh/sedan`
+- `veh/hatchback`
+- `veh/sports`
+
+TEACH ELETRICY applies its own runtime materials, paint colors, lighting, scaling, braking logic, and traffic behavior to these geometries.
