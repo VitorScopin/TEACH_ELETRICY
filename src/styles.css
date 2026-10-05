@@ -1896,3 +1896,185 @@ main {
     grid-column:1;
   }
 }
+
+
+/* --- TEACH ELETRICY custom Electron titlebar --- */
+:root {
+  --app-titlebar-height: 36px;
+}
+.app-titlebar {
+  position:fixed;
+  z-index:100;
+  top:0;
+  left:0;
+  right:0;
+  height:var(--app-titlebar-height);
+  display:grid;
+  grid-template-columns:290px minmax(0,1fr) 138px;
+  align-items:center;
+  border-bottom:1px solid rgba(61,167,194,.18);
+  background:
+    linear-gradient(180deg,rgba(7,25,36,.99),rgba(3,15,23,.99));
+  box-shadow:0 6px 24px rgba(0,0,0,.2);
+  user-select:none;
+  -webkit-app-region:drag;
+}
+.app-titlebar-brand {
+  height:100%;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 12px;
+  color:#39eadd;
+  min-width:0;
+}
+.app-titlebar-brand svg {
+  filter:drop-shadow(0 0 6px rgba(57,234,221,.28));
+}
+.app-titlebar-brand strong {
+  color:#eaf8fb;
+  font-family:"Space Grotesk";
+  font-size:9px;
+  letter-spacing:.08em;
+}
+.app-titlebar-brand span {
+  color:#4f7280;
+  font-size:6.5px;
+  font-weight:800;
+  letter-spacing:.11em;
+}
+.app-titlebar-drag {
+  min-width:0;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  color:#5c7b88;
+  font-size:6.5px;
+  font-weight:800;
+  letter-spacing:.09em;
+}
+.app-titlebar-drag span {
+  color:#7697a4;
+}
+.app-titlebar-drag i {
+  width:3px;
+  height:3px;
+  border-radius:50%;
+  background:#2bd9cf;
+  box-shadow:0 0 6px rgba(43,217,207,.55);
+}
+.app-titlebar-drag small {
+  color:#3e6575;
+  font-size:6.5px;
+  font-weight:900;
+}
+.app-titlebar-actions {
+  height:100%;
+  display:grid;
+  grid-template-columns:repeat(3,46px);
+  justify-content:end;
+  -webkit-app-region:no-drag;
+}
+.app-titlebar-actions button {
+  position:relative;
+  width:46px;
+  height:100%;
+  border:0;
+  border-left:1px solid rgba(74,133,153,.08);
+  background:transparent;
+  color:#8ba4af;
+  display:grid;
+  place-items:center;
+  cursor:pointer;
+}
+.app-titlebar-actions button:hover {
+  background:rgba(41,113,133,.2);
+  color:#e7f7fb;
+}
+.app-titlebar-actions .window-close-button:hover {
+  background:#c94146;
+  color:white;
+}
+.window-minimize-glyph {
+  width:11px;
+  height:1px;
+  background:currentColor;
+}
+.window-maximize-glyph {
+  width:10px;
+  height:10px;
+  border:1px solid currentColor;
+}
+.window-restore-glyph {
+  position:relative;
+  width:9px;
+  height:9px;
+  border:1px solid currentColor;
+}
+.window-restore-glyph:before {
+  content:"";
+  position:absolute;
+  left:2px;
+  bottom:2px;
+  width:8px;
+  height:8px;
+  border:1px solid currentColor;
+  background:#061722;
+  transform:translate(-4px,4px);
+}
+.window-close-glyph {
+  position:relative;
+  width:12px;
+  height:12px;
+}
+.window-close-glyph:before,
+.window-close-glyph:after {
+  content:"";
+  position:absolute;
+  left:5.5px;
+  top:0;
+  width:1px;
+  height:12px;
+  background:currentColor;
+}
+.window-close-glyph:before { transform:rotate(45deg); }
+.window-close-glyph:after { transform:rotate(-45deg); }
+
+.immersive-app {
+  padding-top:var(--app-titlebar-height);
+}
+.immersive-rail {
+  height:calc(100vh - var(--app-titlebar-height));
+  padding-top:14px;
+}
+.immersive-stage {
+  height:calc(100vh - var(--app-titlebar-height));
+}
+.immersive-topbar {
+  top:16px;
+}
+.panel-backdrop {
+  top:0;
+}
+.immersive-drawer {
+  top:0;
+  height:100%;
+}
+
+@media (max-width:760px) {
+  .app-titlebar {
+    grid-template-columns:180px minmax(0,1fr) 120px;
+  }
+  .app-titlebar-brand span,
+  .app-titlebar-drag small {
+    display:none;
+  }
+  .app-titlebar-actions {
+    grid-template-columns:repeat(3,40px);
+  }
+  .app-titlebar-actions button {
+    width:40px;
+  }
+}
