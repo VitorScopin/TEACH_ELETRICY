@@ -136,6 +136,7 @@ function App() {
   const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>('medium')
   const [targetFps, setTargetFps] = useState(30)
   const [connected, setConnected] = useState(false)
+  const [windowMaximized, setWindowMaximized] = useState(false)
   const [config, setConfig] = useState<PlcConfig>(defaultConfig)
   const [opcTagTests, setOpcTagTests] = useState<Record<string, OpcTagTestState>>({})
   const [connectionMessage, setConnectionMessage] = useState('Ambiente virtual pronto')
@@ -148,6 +149,12 @@ function App() {
   const lastPhase = useRef<TrafficKey | null>(null)
   const phaseStartedAtRef = useRef(Date.now())
   const steps = trafficLightProject.sequence
+
+  useEffect(() => {
+    window.teachElectrify?.windowControls.isMaximized().then((result) => {
+      setWindowMaximized(result.maximized)
+    }).catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     signalsRef.current = signals
@@ -350,6 +357,47 @@ function App() {
 
   return (
     <div className="immersive-app">
+      <header className="app-titlebar">
+        <div className="app-titlebar-brand">
+          <Zap size={14} />
+          <strong>TEACH ELETRICY</strong>
+          <span>INDUSTRIAL LEARNING LAB</span>
+        </div>
+
+        <div className="app-titlebar-drag">
+          <span>SEMÁFORO INTELIGENTE</span>
+          <i />
+          <small>{connected ? (config.protocol === 'opcua' ? 'ALTUS OPC UA' : 'SIEMENS S7') : 'SIMULAÇÃO LOCAL'}</small>
+        </div>
+
+        <div className="app-titlebar-actions">
+          <button
+            onClick={() => window.teachElectrify?.windowControls.minimize()}
+            title="Minimizar"
+            aria-label="Minimizar"
+          >
+            <span className="window-minimize-glyph" />
+          </button>
+          <button
+            onClick={async () => {
+              const result = await window.teachElectrify?.windowControls.toggleMaximize()
+              if (result) setWindowMaximized(result.maximized)
+            }}
+            title={windowMaximized ? 'Restaurar' : 'Maximizar'}
+            aria-label={windowMaximized ? 'Restaurar' : 'Maximizar'}
+          >
+            <span className={windowMaximized ? 'window-restore-glyph' : 'window-maximize-glyph'} />
+          </button>
+          <button
+            className="window-close-button"
+            onClick={() => window.teachElectrify?.windowControls.close()}
+            title="Fechar"
+            aria-label="Fechar"
+          >
+            <span className="window-close-glyph" />
+          </button>
+        </div>
+      </header>
       <aside className="immersive-rail">
         <div className="immersive-brand" title="TEACH ELETRICY">
           <Zap size={24} />
