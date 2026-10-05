@@ -35,6 +35,7 @@ import type { IntersectionTrafficState, PlcConfig, SignalId, TrafficState } from
 
 type Mode = 'simulation' | 'plc'
 type TrafficKey = 'red' | 'yellow' | 'green'
+type GraphicsQuality = 'low' | 'medium' | 'high'
 type HubPanel = 'connections' | 'settings' | null
 type OpcTagTestState = {
   loading: boolean
@@ -44,26 +45,10 @@ type OpcTagTestState = {
 }
 
 const defaultOpcTags: PlcConfig['opcTags'] = {
-  west: {
-    red: 'ns=4;s=|var|Application.GVL_Semaforo.OESTE_VERMELHO',
-    yellow: 'ns=4;s=|var|Application.GVL_Semaforo.OESTE_AMARELO',
-    green: 'ns=4;s=|var|Application.GVL_Semaforo.OESTE_VERDE',
-  },
-  east: {
-    red: 'ns=4;s=|var|Application.GVL_Semaforo.LESTE_VERMELHO',
-    yellow: 'ns=4;s=|var|Application.GVL_Semaforo.LESTE_AMARELO',
-    green: 'ns=4;s=|var|Application.GVL_Semaforo.LESTE_VERDE',
-  },
-  north: {
-    red: 'ns=4;s=|var|Application.GVL_Semaforo.NORTE_VERMELHO',
-    yellow: 'ns=4;s=|var|Application.GVL_Semaforo.NORTE_AMARELO',
-    green: 'ns=4;s=|var|Application.GVL_Semaforo.NORTE_VERDE',
-  },
-  south: {
-    red: 'ns=4;s=|var|Application.GVL_Semaforo.SUL_VERMELHO',
-    yellow: 'ns=4;s=|var|Application.GVL_Semaforo.SUL_AMARELO',
-    green: 'ns=4;s=|var|Application.GVL_Semaforo.SUL_VERDE',
-  },
+  west: { red: '', yellow: '', green: '' },
+  east: { red: '', yellow: '', green: '' },
+  north: { red: '', yellow: '', green: '' },
+  south: { red: '', yellow: '', green: '' },
 }
 
 const defaultConfig: PlcConfig = {
@@ -148,6 +133,8 @@ function App() {
   )
   const [phase, setPhase] = useState(0)
   const [running, setRunning] = useState(true)
+  const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>('medium')
+  const [targetFps, setTargetFps] = useState(30)
   const [connected, setConnected] = useState(false)
   const [config, setConfig] = useState<PlcConfig>(defaultConfig)
   const [opcTagTests, setOpcTagTests] = useState<Record<string, OpcTagTestState>>({})
@@ -395,7 +382,7 @@ function App() {
       </aside>
 
       <main className="immersive-stage">
-        <TrafficSimulation3D signals={signals} running={running} />
+        <TrafficSimulation3D signals={signals} running={running} quality={graphicsQuality} targetFps={targetFps} />
 
         <div className="immersive-topbar">
           <div className="immersive-title">
@@ -544,9 +531,16 @@ function App() {
                           <input
                             value={config.opcEndpoint}
                             onChange={(e)=>setConfig({...config,opcEndpoint:e.target.value})}
-                            placeholder="opc.tcp://192.168.15.1:4840"
+                            placeholder="opc.tcp://IP_DO_XP340:4840"
                           />
                         </label>
+                      </div>
+
+                      <div className="altus-opc-guide">
+                        <strong>Configuração recomendada para XP340</strong>
+                        <span>MasterTool: Active IP = IP do CLP • Device Port = 11740 • Gateway = IP do CLP • Gateway Port = 4840 • “Use gateway on CP” habilitado.</span>
+                        <span>Cliente: conecte em <b>opc.tcp://IP_DO_CLP:4840</b>. Publique as variáveis em Application → Symbol Configuration e habilite “Support for OPC UA features”.</span>
+                        <span>Os NodeIds abaixo não têm namespace fixo. Copie o NodeId real pelo UaExpert/Address Space.</span>
                       </div>
 
                       <div className="drawer-fields two">
@@ -665,6 +659,45 @@ function App() {
                     <div className="drawer-section-title">
                       <span>SIMULAÇÃO</span>
                       <strong>Controle do laboratório</strong>
+                    </div>
+
+                    <div className="graphics-settings-card">
+                      <div className="graphics-settings-head">
+                        <div>
+                          <span>DESEMPENHO VISUAL</span>
+                          <strong>Gráficos e FPS</strong>
+                        </div>
+                        <b>{targetFps} FPS</b>
+                      </div>
+
+                      <label>
+                        Qualidade gráfica
+                        <select
+                          value={graphicsQuality}
+                          onChange={(e)=>setGraphicsQuality(e.target.value as GraphicsQuality)}
+                        >
+                          <option value="low">Baixo — máximo desempenho</option>
+                          <option value="medium">Médio — equilibrado</option>
+                          <option value="high">Alto — melhor visual</option>
+                        </select>
+                      </label>
+
+                      <label>
+                        Limite de FPS
+                        <select
+                          value={targetFps}
+                          onChange={(e)=>setTargetFps(Number(e.target.value))}
+                        >
+                          <option value={20}>20 FPS</option>
+                          <option value={30}>30 FPS</option>
+                          <option value={45}>45 FPS</option>
+                          <option value={60}>60 FPS</option>
+                        </select>
+                      </label>
+
+                      <small>
+                        FPS maior deixa os carros mais fluidos, mas aumenta CPU/GPU. Para testar PLC, 30–45 FPS costuma ser o melhor equilíbrio.
+                      </small>
                     </div>
 
                     <div className="settings-runtime-card">
