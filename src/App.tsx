@@ -163,6 +163,10 @@ function App() {
   const steps = trafficLightProject.sequence
 
   useEffect(() => {
+    signalsRef.current = signals
+  }, [signals])
+
+  useEffect(() => {
     if (mode !== 'simulation' || !running) return
     const current = steps[phase]
     const mainState = lightToState(current.key)
