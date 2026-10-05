@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TeachOpcDaBridge</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="GodSharp.Opc.Da.OpcNetApi" Version="2022.308.10" />
+  </ItemGroup>
+</Project>
