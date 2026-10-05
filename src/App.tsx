@@ -31,7 +31,7 @@ import {
 import { trafficLightProject } from './projects/trafficLight'
 import { getActiveLights, validateTrafficState } from './lib/trafficValidator'
 import { TrafficSimulation3D } from './components/TrafficSimulation3D'
-import type { PlcConfig, TrafficState } from './types'
+import type { IntersectionTrafficState, PlcConfig, SignalId, TrafficState } from './types'
 
 type Mode = 'simulation' | 'plc'
 type TrafficKey = 'red' | 'yellow' | 'green'
@@ -39,7 +39,10 @@ type TrafficKey = 'red' | 'yellow' | 'green'
 const defaultConfig: PlcConfig = {
   ...trafficLightProject.defaultConnection,
   tags: Object.fromEntries(
-    trafficLightProject.tags.map((tag) => [tag.key, tag.address]),
+    trafficLightProject.signals.map((signal) => [
+      signal.id,
+      Object.fromEntries(signal.tags.map((tag) => [tag.key, tag.address])),
+    ]),
   ) as PlcConfig['tags'],
 }
 
@@ -47,6 +50,18 @@ const lightToState = (key: TrafficKey): TrafficState => ({
   red: key === 'red',
   yellow: key === 'yellow',
   green: key === 'green',
+})
+
+const oppositeState = (main: TrafficState): TrafficState =>
+  main.red
+    ? { red: false, yellow: false, green: true }
+    : { red: true, yellow: false, green: false }
+
+const buildSimulationSignals = (main: TrafficState): IntersectionTrafficState => ({
+  west: main,
+  east: main,
+  north: oppositeState(main),
+  south: oppositeState(main),
 })
 
 const stateLabel: Record<string, string> = {
@@ -60,6 +75,9 @@ const stateLabel: Record<string, string> = {
 function App() {
   const [mode, setMode] = useState<Mode>('simulation')
   const [traffic, setTraffic] = useState<TrafficState>(lightToState('red'))
+  const [signals, setSignals] = useState<IntersectionTrafficState>(() =>
+    buildSimulationSignals(lightToState('red')),
+  )
   const [phase, setPhase] = useState(0)
   const [running, setRunning] = useState(true)
   const [connected, setConnected] = useState(false)
@@ -78,7 +96,9 @@ function App() {
   useEffect(() => {
     if (mode !== 'simulation' || !running) return
     const current = steps[phase]
-    setTraffic(lightToState(current.key))
+    const mainState = lightToState(current.key)
+    setTraffic(mainState)
+    setSignals(buildSimulationSignals(mainState))
     const timer = window.setTimeout(() => {
       setPhase((value) => (value + 1) % steps.length)
     }, current.durationMs)
@@ -90,8 +110,9 @@ function App() {
     const poll = async () => {
       const result = await window.teachElectrify?.plc.readTraffic()
       if (result?.ok && result.values) {
-        setTraffic(result.values)
-        setConnectionMessage('PLC Siemens conectado')
+        setSignals(result.values)
+        setTraffic(result.values.west)
+        setConnectionMessage('PLC Siemens conectado • 4 semáforos independentes')
       } else if (result) {
         setConnectionMessage(result.message || 'Falha na leitura do PLC')
       }
@@ -148,11 +169,6 @@ function App() {
     (safeNow ? 20 : 0) + seenStates.size * 10 + timingPass.size * 10 + (sequencePass ? 20 : 0),
   )
 
-  const activeStep = activeLights.length === 1
-    ? steps.find((step) => step.key === activeLights[0])
-    : undefined
-  const phaseDurationSec = (activeStep?.durationMs ?? 5000) / 1000
-
   const connect = async () => {
     setMode('plc')
     setConnectionMessage('Conectando ao PLC...')
@@ -179,7 +195,9 @@ function App() {
     lastPhase.current = null
     phaseStartedAtRef.current = Date.now()
     setPhase(0)
-    setTraffic(lightToState('red'))
+    const resetState = lightToState('red')
+    setTraffic(resetState)
+    setSignals(buildSimulationSignals(resetState))
     setRunning(true)
   }
 
@@ -281,10 +299,8 @@ function App() {
             <section className="simulation-card panel">
               <div className="city-lab city-lab-3d">
                 <TrafficSimulation3D
-                  traffic={traffic}
+                  signals={signals}
                   running={running}
-                  phaseElapsed={phaseElapsed}
-                  phaseDuration={phaseDurationSec}
                 />
 
                 <div className="telemetry-overlay">
@@ -314,7 +330,9 @@ function App() {
                       onClick={() => {
                         setMode('simulation')
                         setPhase(index)
-                        setTraffic(lightToState(step.key))
+                        const selected = lightToState(step.key)
+                        setTraffic(selected)
+                        setSignals(buildSimulationSignals(selected))
                       }}
                     >
                       <i className={`phase-lamp ${step.key}`} />
@@ -378,14 +396,35 @@ function App() {
                   <label>Slot<input type="number" value={config.slot} onChange={(e)=>setConfig({...config,slot:Number(e.target.value)})}/></label>
                 </div>
 
-                <div className="tag-heading">Tags de saída (Q)</div>
-                <div className="tag-list">
-                  {trafficLightProject.tags.map(tag=>(
-                    <label key={tag.key}>
-                      <i className={`tag-dot ${tag.key}`}/>
-                      <span>{tag.label}</span>
-                      <input value={config.tags[tag.key]} onChange={(e)=>setConfig({...config,tags:{...config.tags,[tag.key]:e.target.value}})}/>
-                    </label>
+                <div className="tag-heading">Memórias dos semáforos</div>
+                <div className="signal-memory-grid">
+                  {trafficLightProject.signals.map((signal) => (
+                    <div className="signal-memory-group" key={signal.id}>
+                      <strong>{signal.label}</strong>
+                      <div className="tag-list">
+                        {signal.tags.map((tag) => (
+                          <label key={`${signal.id}-${tag.key}`}>
+                            <i className={`tag-dot ${tag.key}`}/>
+                            <span>{tag.label}</span>
+                            <input
+                              value={config.tags[signal.id as SignalId][tag.key]}
+                              onChange={(e) =>
+                                setConfig({
+                                  ...config,
+                                  tags: {
+                                    ...config.tags,
+                                    [signal.id]: {
+                                      ...config.tags[signal.id as SignalId],
+                                      [tag.key]: e.target.value,
+                                    },
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
 
