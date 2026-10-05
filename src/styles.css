@@ -870,3 +870,247 @@ main { min-width:0; padding:22px 20px 20px; }
     grid-template-columns:88px minmax(0,1fr) 43px 40px;
   }
 }
+
+
+/* --- Fullscreen clean hub --- */
+html, body, #root {
+  width:100%;
+  height:100%;
+  min-height:0;
+  overflow:hidden;
+}
+body {
+  min-height:0;
+  overflow:hidden;
+}
+.desktop-frame {
+  width:100vw;
+  height:100vh;
+  min-height:0;
+  margin:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+}
+.window-strip {
+  height:28px;
+}
+.app-shell {
+  height:calc(100vh - 28px);
+  min-height:0;
+  grid-template-columns:70px minmax(0,1fr);
+  overflow:hidden;
+}
+.command-rail {
+  min-height:0;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:12px;
+  padding:12px 8px;
+  border-right:1px solid rgba(69,167,201,.16);
+  background:linear-gradient(180deg,#04131d,#031018);
+}
+.rail-brand {
+  width:46px;
+  height:46px;
+  display:grid;
+  place-items:center;
+  color:#38eee4;
+  border:1px solid rgba(47,224,220,.24);
+  border-radius:12px;
+  background:rgba(9,42,53,.5);
+  box-shadow:inset 0 0 20px rgba(42,222,217,.05);
+}
+.rail-nav {
+  width:100%;
+  margin:8px 0 0;
+  display:grid;
+  gap:8px;
+}
+.rail-button,
+.rail-reset {
+  width:54px;
+  min-height:52px;
+  margin:0 auto;
+  padding:6px 3px;
+  border:1px solid transparent;
+  border-radius:9px;
+  background:transparent;
+  color:#7894a1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  cursor:pointer;
+}
+.rail-button span {
+  font-size:6.5px;
+  font-weight:800;
+  letter-spacing:.02em;
+  white-space:nowrap;
+}
+.rail-button:hover {
+  color:#c7e9f3;
+  background:rgba(20,99,122,.12);
+}
+.rail-button.active {
+  color:#dffffb;
+  border-color:rgba(41,232,219,.42);
+  background:linear-gradient(180deg,rgba(17,121,133,.23),rgba(5,48,61,.3));
+  box-shadow:inset 0 0 18px rgba(38,224,215,.06);
+}
+.rail-button.active svg {
+  color:#35ebe0;
+  filter:drop-shadow(0 0 6px rgba(53,235,224,.35));
+}
+.rail-reset {
+  margin-top:auto;
+  min-height:44px;
+  color:#668793;
+  border-color:rgba(70,130,152,.14);
+}
+main {
+  min-height:0;
+  height:100%;
+  overflow:hidden;
+  padding:10px 12px 10px;
+  display:grid;
+  grid-template-rows:auto auto minmax(0,1fr);
+}
+.topbar {
+  align-items:center;
+  min-height:58px;
+}
+.breadcrumb,
+.header-copy p {
+  display:none;
+}
+.title-line h1 {
+  font-size:22px;
+}
+.top-actions {
+  padding-top:0;
+}
+.run-status,
+.icon-button {
+  height:34px;
+}
+.mission-strip {
+  margin-top:7px;
+  gap:7px;
+}
+.mission-item {
+  min-height:48px;
+  padding:7px 10px;
+}
+.stat-icon {
+  width:30px;
+  height:30px;
+}
+.mission-item strong {
+  font-size:9px;
+}
+.score-card strong {
+  font-size:16px;
+}
+.workspace-grid {
+  min-height:0;
+  height:100%;
+  margin-top:8px;
+  grid-template-columns:minmax(0,1fr) 330px;
+  gap:8px;
+  overflow:hidden;
+}
+.simulation-card {
+  min-height:0;
+  height:100%;
+  display:grid;
+  grid-template-rows:minmax(0,1fr) 86px;
+}
+.city-lab {
+  height:auto;
+  min-height:0;
+}
+.phase-control {
+  min-height:0;
+  height:86px;
+  padding:7px 10px;
+}
+.phase-title {
+  margin-bottom:5px;
+}
+.phase-row {
+  gap:6px;
+}
+.phase-card {
+  min-height:48px;
+  padding:5px 7px;
+}
+.execute-button {
+  min-height:48px;
+}
+.right-column {
+  min-height:0;
+  height:100%;
+  display:block;
+  overflow:hidden;
+}
+.right-column > .panel {
+  height:100%;
+  overflow:auto;
+  scrollbar-width:none;
+}
+.right-column > .panel::-webkit-scrollbar {
+  display:none;
+}
+.validation-card,
+.connection-card {
+  padding:11px 12px;
+}
+.protocol-selector {
+  display:none;
+}
+.bottom-grid {
+  display:none;
+}
+.telemetry-overlay {
+  transform:scale(.88);
+  transform-origin:top left;
+}
+.plant-virtual {
+  transform:scale(.88);
+  transform-origin:top right;
+}
+.opc-mapping-grid {
+  gap:5px;
+}
+.opc-signal-card {
+  padding:6px;
+}
+.opc-tag-map {
+  min-height:31px;
+  padding:3px 0;
+}
+.opc-node-input {
+  height:24px;
+}
+.opc-test-button {
+  height:24px;
+}
+.connection-actions {
+  position:sticky;
+  bottom:0;
+  padding-top:7px;
+  background:linear-gradient(180deg,rgba(4,18,28,0),rgba(4,18,28,.98) 28%);
+}
+@media (max-width: 1180px) {
+  .workspace-grid {
+    grid-template-columns:minmax(0,1fr) 300px;
+  }
+  .mission-strip {
+    grid-template-columns:1.2fr .9fr 1fr .75fr;
+  }
+}
