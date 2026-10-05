@@ -33,8 +33,8 @@ type TrafficSimulation3DProps = {
 
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
 const KINDS: VehicleKind[] = ['sedan']
-const MAX_CARS_PER_FLOW = 3
-const TARGET_FRAME_MS = 34
+const MAX_CARS_PER_FLOW = 2
+const TARGET_FRAME_MS = 50
 
 const VEHICLE_MODELS: Record<
   VehicleVariant,
@@ -746,8 +746,8 @@ function TrafficCars({
         .sort((a, b) => b.progress - a.progress)
 
       const tail = flowCars.length ? flowCars[flowCars.length - 1] : null
-      const spawnClear = !tail || tail.progress > def.spawn + 9.5
-      const interval = flowId === 'eastbound' || flowId === 'westbound' ? 3.2 : 3.6
+      const spawnClear = !tail || tail.progress > def.spawn + 10.5
+      const interval = flowId === 'eastbound' || flowId === 'westbound' ? 3.8 : 4.2
       const belowFlowLimit = flowCars.length < MAX_CARS_PER_FLOW
 
       if (spawnClocks.current[flowId] >= interval && spawnClear && belowFlowLimit) {
@@ -893,13 +893,38 @@ function TrafficCars({
   )
 }
 
-function RenderLimiter() {
+function RenderLimiter({ active }: { active: boolean }) {
   const invalidate = useThree((state) => state.invalidate)
 
   useEffect(() => {
-    const timer = window.setInterval(() => invalidate(), TARGET_FRAME_MS)
-    return () => window.clearInterval(timer)
-  }, [invalidate])
+    if (!active) return
+
+    let timer = 0
+
+    const start = () => {
+      if (document.hidden || timer) return
+      timer = window.setInterval(() => invalidate(), TARGET_FRAME_MS)
+    }
+
+    const stop = () => {
+      if (!timer) return
+      window.clearInterval(timer)
+      timer = 0
+    }
+
+    const onVisibilityChange = () => {
+      if (document.hidden) stop()
+      else start()
+    }
+
+    start()
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [active, invalidate])
 
   return null
 }
@@ -993,7 +1018,7 @@ export function TrafficSimulation3D({
           depth: true,
         }}
       >
-        <RenderLimiter />
+        <RenderLimiter active={running} />
         <Scene signals={signals} running={running} />
       </Canvas>
 
