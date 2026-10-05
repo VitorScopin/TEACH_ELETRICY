@@ -844,10 +844,10 @@ function TrafficCars({
             group.userData.cachedBrakeLamps = brakeLamps
           }
 
-          for (const wheel of wheels) wheel.rotateX(wheelSpin)
+          for (const wheel of wheels ?? []) wheel.rotateX(wheelSpin)
 
           const brakeColor = car.braking ? '#ff2b30' : '#5a1114'
-          for (const lamp of brakeLamps) {
+          for (const lamp of brakeLamps ?? []) {
             const material = lamp.material
             if (material instanceof THREE.MeshBasicMaterial) {
               material.color.set(brakeColor)
@@ -940,18 +940,13 @@ function Scene({
       <color attach="background" args={['#07141e']} />
       <fog attach="fog" args={['#07141e', 34, 70]} />
 
-      <ambientLight intensity={0.58} />
-      <hemisphereLight args={['#8ec8e8', '#172025', 0.72]} />
+      <ambientLight intensity={0.76} />
+      <hemisphereLight args={['#8ec8e8', '#172025', 0.56]} />
       <directionalLight
-       
         position={[15, 24, 12]}
-        intensity={1.55}
+        intensity={1.22}
         color="#e0f2ff"
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
       />
-      <pointLight position={[-10, 8, 11]} intensity={12} distance={24} color="#78cfff" />
-      <pointLight position={[11, 6, -10]} intensity={8} distance={22} color="#ffd28a" />
 
       <RoadScene />
 
