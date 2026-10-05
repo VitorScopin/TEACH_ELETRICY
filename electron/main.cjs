@@ -1,5 +1,8 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
+const fs = require('node:fs')
+const { spawn } = require('node:child_process')
+const readline = require('node:readline')
 const nodes7 = require('nodes7')
 let opcUaModule = null
 
@@ -13,6 +16,11 @@ function getOpcUa() {
 let plc = null
 let opcClient = null
 let opcSession = null
+let opcDaBridge = null
+let opcDaReader = null
+let opcDaPending = []
+let opcDaChain = Promise.resolve()
+let opcDaStderr = ''
 let plcConnected = false
 let activeConfig = null
 
@@ -69,7 +77,274 @@ ipcMain.handle('window:is-maximized', (event) => {
   return { maximized: Boolean(win?.isMaximized()) }
 })
 
+
+function buildOpcDaPrefix(config) {
+  return [
+    config.opcDaPlcName?.trim(),
+    config.opcDaApplicationName?.trim(),
+    config.opcDaGvlName?.trim(),
+  ].filter(Boolean).join('.')
+}
+
+function resolveOpcDaAddress(config, address) {
+  const value = String(address || '').trim()
+  if (!value) return ''
+  if (value.includes('.')) return value
+  const prefix = buildOpcDaPrefix(config)
+  return prefix ? `${prefix}.${value}` : value
+}
+
+function opcDaBridgeCandidates(architecture = 'auto') {
+  const roots = [
+    path.join(__dirname, 'opc-da-bridge'),
+    path.join(process.resourcesPath || '', 'opc-da-bridge'),
+    process.resourcesPath || '',
+  ].filter(Boolean)
+
+  const x86 = []
+  const x64 = []
+  for (const root of roots) {
+    x86.push(path.join(root, 'opc-da-bridge-x86.exe'))
+    x86.push(path.join(root, 'publish', 'x86', 'opc-da-bridge-x86.exe'))
+    x64.push(path.join(root, 'opc-da-bridge-x64.exe'))
+    x64.push(path.join(root, 'publish', 'x64', 'opc-da-bridge-x64.exe'))
+  }
+
+  const order =
+    architecture === 'x86' ? [...x86, ...x64] :
+    architecture === 'x64' ? [...x64, ...x86] :
+    [...x64, ...x86]
+
+  return [...new Set(order)]
+}
+
+function rejectOpcDaPending(error) {
+  const pending = opcDaPending.splice(0)
+  for (const item of pending) item.reject(error)
+}
+
+async function stopOpcDaBridge() {
+  if (!opcDaBridge) return
+
+  try {
+    await opcDaExchange({ command: 'disconnect' })
+  } catch {}
+
+  try { opcDaReader?.close() } catch {}
+  opcDaReader = null
+
+  try { opcDaBridge.kill() } catch {}
+  opcDaBridge = null
+  rejectOpcDaPending(new Error('Bridge OPC DA encerrado'))
+}
+
+function startOpcDaBridge(executable) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, [], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+
+    let settled = false
+    opcDaStderr = ''
+
+    child.once('error', (error) => {
+      if (!settled) {
+        settled = true
+        reject(error)
+      }
+      rejectOpcDaPending(error)
+    })
+
+    child.once('spawn', () => {
+      opcDaBridge = child
+      opcDaReader = readline.createInterface({ input: child.stdout })
+
+      opcDaReader.on('line', (line) => {
+        const next = opcDaPending.shift()
+        if (!next) return
+
+        try {
+          const response = JSON.parse(line)
+          if (response?.ok) next.resolve(response.result)
+          else next.reject(new Error(response?.error || 'Erro OPC DA desconhecido'))
+        } catch (error) {
+          next.reject(error)
+        }
+      })
+
+      child.stderr.on('data', (chunk) => {
+        opcDaStderr = (opcDaStderr + chunk.toString()).slice(-6000)
+      })
+
+      child.once('exit', (code) => {
+        const message = opcDaStderr.trim() || `Bridge OPC DA encerrado (código ${code ?? 'desconhecido'})`
+        opcDaBridge = null
+        try { opcDaReader?.close() } catch {}
+        opcDaReader = null
+        rejectOpcDaPending(new Error(message))
+      })
+
+      if (!settled) {
+        settled = true
+        resolve()
+      }
+    })
+  })
+}
+
+function opcDaExchange(request) {
+  const run = opcDaChain.catch(() => undefined).then(() => new Promise((resolve, reject) => {
+    if (!opcDaBridge?.stdin?.writable) {
+      reject(new Error('Bridge OPC DA não está disponível'))
+      return
+    }
+
+    const timer = setTimeout(() => {
+      const index = opcDaPending.findIndex((item) => item.resolve === wrappedResolve)
+      if (index >= 0) opcDaPending.splice(index, 1)
+      reject(new Error('Timeout na comunicação com a bridge OPC DA'))
+    }, 5000)
+
+    const wrappedResolve = (value) => {
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const wrappedReject = (error) => {
+      clearTimeout(timer)
+      reject(error)
+    }
+
+    opcDaPending.push({ resolve: wrappedResolve, reject: wrappedReject })
+    opcDaBridge.stdin.write(`${JSON.stringify(request)}\n`)
+  }))
+
+  opcDaChain = run
+  return run
+}
+
+async function connectOpcDa(config) {
+  const tags = normalizeTags(config.opcDaTags, {})
+  const fullTags = []
+
+  for (const signalId of SIGNAL_IDS) {
+    for (const lightKey of LIGHT_KEYS) {
+      const fullAddress = resolveOpcDaAddress(config, tags[signalId]?.[lightKey])
+      if (!fullAddress) {
+        throw new Error(`Tag OPC DA não configurada: ${signalId} / ${lightKey}`)
+      }
+      fullTags.push(fullAddress)
+    }
+  }
+
+  const candidates = opcDaBridgeCandidates(config.opcDaArchitecture)
+  const available = candidates.filter((candidate) => fs.existsSync(candidate))
+  if (!available.length) {
+    throw new Error(
+      'Bridge OPC DA não encontrada. Execute electron\\opc-da-bridge\\build-opc-da-bridge.bat antes de conectar.'
+    )
+  }
+
+  const errors = []
+  for (const executable of available) {
+    try {
+      await stopOpcDaBridge()
+      await startOpcDaBridge(executable)
+      const result = await opcDaExchange({
+        command: 'connect',
+        progId: config.opcDaProgId || 'CoDeSys.OPC.DA',
+        host: config.opcDaHost || '',
+        tags: fullTags,
+        timeout: Number(config.opcDaTimeout || 3000),
+      })
+
+      activeConfig = {
+        ...config,
+        protocol: 'opcda',
+        opcDaTags: tags,
+      }
+      plcConnected = true
+
+      return {
+        ok: true,
+        message: `Altus OPC DA conectado via ${result?.architecture || 'bridge'}`,
+        config: activeConfig,
+      }
+    } catch (error) {
+      errors.push(`${path.basename(executable)}: ${error instanceof Error ? error.message : String(error)}`)
+      try { await stopOpcDaBridge() } catch {}
+    }
+  }
+
+  throw new Error(`Nenhuma bridge OPC DA conseguiu conectar. ${errors.join(' | ')}`)
+}
+
+async function readOpcDaTraffic() {
+  const tags = activeConfig?.opcDaTags
+  if (!tags || !opcDaBridge) {
+    return { ok: false, message: 'OPC DA desconectado' }
+  }
+
+  const descriptors = []
+  for (const signalId of SIGNAL_IDS) {
+    for (const lightKey of LIGHT_KEYS) {
+      descriptors.push({
+        signalId,
+        lightKey,
+        tag: resolveOpcDaAddress(activeConfig, tags[signalId]?.[lightKey]),
+      })
+    }
+  }
+
+  const results = await opcDaExchange({
+    command: 'read',
+    tags: descriptors.map((item) => item.tag),
+  })
+
+  const signals = {}
+  for (const signalId of SIGNAL_IDS) {
+    signals[signalId] = { red: false, yellow: false, green: false }
+  }
+
+  results.forEach((result, index) => {
+    const descriptor = descriptors[index]
+    if (!result?.ok) {
+      throw new Error(`Falha OPC DA em ${descriptor.tag} (code ${result?.code ?? '?'})`)
+    }
+    signals[descriptor.signalId][descriptor.lightKey] = Boolean(result.value)
+  })
+
+  return { ok: true, values: signals, at: Date.now(), protocol: 'opcda' }
+}
+
+async function testOpcDaTag(config, signalId, lightKey) {
+  if (!plcConnected || activeConfig?.protocol !== 'opcda' || !opcDaBridge) {
+    return { ok: false, message: 'Conecte ao OPC DA antes de testar a tag' }
+  }
+
+  const address = resolveOpcDaAddress(config || activeConfig, activeConfig.opcDaTags?.[signalId]?.[lightKey])
+  if (!address) return { ok: false, message: 'Tag OPC DA não configurada' }
+
+  try {
+    const result = (await opcDaExchange({ command: 'read', tags: [address] }))[0]
+    if (!result?.ok) {
+      return { ok: false, message: `Qualidade OPC DA inválida (code ${result?.code ?? '?'})` }
+    }
+    return {
+      ok: true,
+      value: Boolean(result.value),
+      quality: result.quality,
+      tag: address,
+      at: Date.now(),
+    }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 async function closePlc() {
+  await stopOpcDaBridge()
+
   if (opcSession) {
     try {
       await opcSession.close()
@@ -220,9 +495,8 @@ ipcMain.handle('plc:connect', async (_event, config) => {
   await closePlc()
 
   try {
-    if (config.protocol === 'opcua') {
-      return await connectOpcUa(config)
-    }
+    if (config.protocol === 'opcua') return await connectOpcUa(config)
+    if (config.protocol === 'opcda') return await connectOpcDa(config)
     return await connectS7(config)
   } catch (error) {
     await closePlc()
@@ -258,6 +532,10 @@ ipcMain.handle('plc:update-opc-tags', async (_event, opcTags) => {
     message: 'Mapeamento OPC UA sincronizado com as 12 lâmpadas',
     opcTags: activeConfig.opcTags,
   }
+})
+
+ipcMain.handle('plc:test-opc-da-tag', async (_event, signalId, lightKey) => {
+  return await testOpcDaTag(activeConfig, signalId, lightKey)
 })
 
 ipcMain.handle('plc:test-opc-node', async (_event, nodeId) => {
@@ -381,9 +659,9 @@ ipcMain.handle('plc:read-traffic', async () => {
   }
 
   try {
-    return activeConfig.protocol === 'opcua'
-      ? await readOpcTraffic()
-      : await readS7Traffic()
+    if (activeConfig.protocol === 'opcua') return await readOpcTraffic()
+    if (activeConfig.protocol === 'opcda') return await readOpcDaTraffic()
+    return await readS7Traffic()
   } catch (error) {
     return {
       ok: false,
