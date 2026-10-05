@@ -712,6 +712,23 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
 
 const FLOW_ORDER: FlowId[] = ['eastbound', 'westbound', 'northbound', 'southbound']
 
+function applyWorldPosition(group: THREE.Group, flowId: FlowId, progress: number) {
+  switch (flowId) {
+    case 'eastbound':
+      group.position.set(progress, 0.02, TRAFFIC_WORLD.eastboundLaneZ)
+      break
+    case 'westbound':
+      group.position.set(-progress, 0.02, TRAFFIC_WORLD.westboundLaneZ)
+      break
+    case 'northbound':
+      group.position.set(TRAFFIC_WORLD.eastboundLaneZ, 0.02, -progress)
+      break
+    case 'southbound':
+      group.position.set(-TRAFFIC_WORLD.eastboundLaneZ, 0.02, progress)
+      break
+  }
+}
+
 function TrafficCars({
   signals,
   running,
@@ -722,6 +739,12 @@ function TrafficCars({
   const [cars, setCars] = useState<CarData[]>([])
   const carsRef = useRef<CarData[]>([])
   const refs = useRef(new Map<number, THREE.Group>())
+  const flowBuckets = useRef<Record<FlowId, CarData[]>>({
+    eastbound: [],
+    westbound: [],
+    northbound: [],
+    southbound: [],
+  })
   const idRef = useRef(1)
   const spawnClocks = useRef<Record<FlowId, number>>({
     eastbound: 0,
@@ -738,12 +761,20 @@ function TrafficCars({
     let spawned = false
 
     for (const flowId of FLOW_ORDER) {
+      flowBuckets.current[flowId].length = 0
+    }
+    for (const car of workingCars) {
+      flowBuckets.current[car.flow].push(car)
+    }
+    for (const flowId of FLOW_ORDER) {
+      flowBuckets.current[flowId].sort((a, b) => b.progress - a.progress)
+    }
+
+    for (const flowId of FLOW_ORDER) {
       const def = FLOW_DEFINITIONS[flowId]
       spawnClocks.current[flowId] += delta
 
-      const flowCars = workingCars
-        .filter((car) => car.flow === flowId)
-        .sort((a, b) => b.progress - a.progress)
+      const flowCars = flowBuckets.current[flowId]
 
       const tail = flowCars.length ? flowCars[flowCars.length - 1] : null
       const spawnClear = !tail || tail.progress > def.spawn + 10.5
@@ -757,21 +788,21 @@ function TrafficCars({
         const variant = VEHICLE_VARIANTS[id % VEHICLE_VARIANTS.length]
         const model = VEHICLE_MODELS[variant]
 
-        workingCars = [
-          ...workingCars,
-          {
-            id,
-            kind,
-            variant,
-            color: COLORS[id % COLORS.length],
-            flow: flowId,
-            progress: def.spawn,
-            speed: 0,
-            desiredSpeed: 5.6 + (id % 4) * 0.42,
-            length: model.length,
-            braking: false,
-          },
-        ]
+        const spawnedCar: CarData = {
+          id,
+          kind,
+          variant,
+          color: COLORS[id % COLORS.length],
+          flow: flowId,
+          progress: def.spawn,
+          speed: 0,
+          desiredSpeed: 5.6 + (id % 4) * 0.42,
+          length: model.length,
+          braking: false,
+        }
+        workingCars = [...workingCars, spawnedCar]
+        flowBuckets.current[flowId].push(spawnedCar)
+        flowBuckets.current[flowId].sort((a, b) => b.progress - a.progress)
         spawned = true
       }
     }
@@ -779,9 +810,7 @@ function TrafficCars({
     for (const flowId of FLOW_ORDER) {
       const def = FLOW_DEFINITIONS[flowId]
       const signal = signals[def.signalId]
-      const flowCars = workingCars
-        .filter((car) => car.flow === flowId)
-        .sort((a, b) => b.progress - a.progress)
+      const flowCars = flowBuckets.current[flowId]
 
       flowCars.forEach((car, index) => {
         const ahead = index > 0 ? flowCars[index - 1] : null
@@ -824,8 +853,7 @@ function TrafficCars({
 
         const group = refs.current.get(car.id)
         if (group) {
-          const [x, y, z] = def.toWorld(car.progress)
-          group.position.set(x, y, z)
+          applyWorldPosition(group, flowId, car.progress)
           const wheelSpin = car.speed * delta / 0.34
 
           let wheels = group.userData.cachedWheels as THREE.Object3D[] | undefined
