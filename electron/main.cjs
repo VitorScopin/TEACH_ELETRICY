@@ -6,6 +6,9 @@ let plc = null
 let plcConnected = false
 let activeConfig = null
 
+const SIGNAL_IDS = ['west', 'east', 'north', 'south']
+const LIGHT_KEYS = ['red', 'yellow', 'green']
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1460,
@@ -59,10 +62,23 @@ ipcMain.handle('plc:connect', async (_event, config) => {
   await closePlc()
 
   const connection = new nodes7()
-  const tags = {
-    red: config.tags?.red || 'M0.0',
-    yellow: config.tags?.yellow || 'M0.1',
-    green: config.tags?.green || 'M0.2',
+  const defaults = {
+    west: { red: 'M0.0', yellow: 'M0.1', green: 'M0.2' },
+    east: { red: 'M0.3', yellow: 'M0.4', green: 'M0.5' },
+    north: { red: 'M0.6', yellow: 'M0.7', green: 'M1.0' },
+    south: { red: 'M1.1', yellow: 'M1.2', green: 'M1.3' },
+  }
+
+  const tags = {}
+  const aliases = []
+
+  for (const signalId of SIGNAL_IDS) {
+    tags[signalId] = {}
+    for (const lightKey of LIGHT_KEYS) {
+      const alias = `${signalId}_${lightKey}`
+      tags[signalId][lightKey] = config.tags?.[signalId]?.[lightKey] || defaults[signalId][lightKey]
+      aliases.push(alias)
+    }
   }
 
   return new Promise((resolve) => {
@@ -81,8 +97,11 @@ ipcMain.handle('plc:connect', async (_event, config) => {
           return
         }
 
-        connection.setTranslationCB((tag) => tags[tag])
-        connection.addItems(['red', 'yellow', 'green'])
+        connection.setTranslationCB((alias) => {
+          const [signalId, lightKey] = alias.split('_')
+          return tags[signalId]?.[lightKey]
+        })
+        connection.addItems(aliases)
 
         plc = connection
         plcConnected = true
@@ -115,13 +134,18 @@ ipcMain.handle('plc:read-traffic', async () => {
         return
       }
 
+      const signals = {}
+      for (const signalId of SIGNAL_IDS) {
+        signals[signalId] = {
+          red: Boolean(values[`${signalId}_red`]),
+          yellow: Boolean(values[`${signalId}_yellow`]),
+          green: Boolean(values[`${signalId}_green`]),
+        }
+      }
+
       resolve({
         ok: true,
-        values: {
-          red: Boolean(values.red),
-          yellow: Boolean(values.yellow),
-          green: Boolean(values.green),
-        },
+        values: signals,
         at: Date.now(),
       })
     })
