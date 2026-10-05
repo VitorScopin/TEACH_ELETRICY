@@ -14,6 +14,19 @@ declare global {
           values?: IntersectionTrafficState
           at?: number
         }>
+        updateOpcTags: (opcTags: PlcConfig['opcTags']) => Promise<{
+          ok: boolean
+          message?: string
+          opcTags?: PlcConfig['opcTags']
+        }>
+        testOpcNode: (nodeId: string) => Promise<{
+          ok: boolean
+          message?: string
+          value?: boolean
+          statusCode?: string
+          nodeId?: string
+          at?: number
+        }>
         status: () => Promise<{ connected: boolean; config?: PlcConfig | null }>
       }
     }
