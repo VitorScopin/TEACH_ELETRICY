@@ -192,7 +192,7 @@ function SignalHead({ traffic }: { traffic: TrafficState }) {
 
   return (
     <group>
-      <mesh castShadow>
+      <mesh>
         <boxGeometry
           args={[
             TRAFFIC_WORLD.signalHeadWidth,
@@ -229,7 +229,7 @@ function TrafficLight3D({
 }) {
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
-      <mesh castShadow position={[0, TRAFFIC_WORLD.signalPoleHeight / 2, 0]}>
+      <mesh position={[0, TRAFFIC_WORLD.signalPoleHeight / 2, 0]}>
         <cylinderGeometry args={[0.055, 0.072, TRAFFIC_WORLD.signalPoleHeight, 8]} />
         <meshStandardMaterial color="#59666d" metalness={0.7} roughness={0.34} />
       </mesh>
@@ -238,7 +238,7 @@ function TrafficLight3D({
         <SignalHead traffic={traffic} />
       </group>
 
-      <mesh castShadow position={[0, 0.07, 0]}>
+      <mesh position={[0, 0.07, 0]}>
         <cylinderGeometry args={[0.13, 0.17, 0.14, 8]} />
         <meshStandardMaterial color="#323d43" metalness={0.42} roughness={0.52} />
       </mesh>
@@ -256,7 +256,7 @@ function Building({
   index: number
 }) {
   return (
-    <mesh position={position} receiveShadow castShadow>
+    <mesh position={position}>
       <boxGeometry args={size} />
       <meshStandardMaterial color={index % 2 ? '#102936' : '#0d2330'} roughness={0.82} />
     </mesh>
@@ -383,14 +383,14 @@ function SidewalkCorner({
 
   return (
     <group>
-      <mesh receiveShadow castShadow position={[centerX, TRAFFIC_WORLD.sidewalkHeight / 2, centerZ]}>
+      <mesh position={[centerX, TRAFFIC_WORLD.sidewalkHeight / 2, centerZ]}>
         <boxGeometry args={[sx, TRAFFIC_WORLD.sidewalkHeight, sz]} />
         <meshStandardMaterial color="#73797a" roughness={0.94} />
       </mesh>
 
       {/* curb edges along both road faces */}
       <mesh
-        castShadow
+       
         position={[
           x * (TRAFFIC_WORLD.roadWidth / 2 + TRAFFIC_WORLD.curbWidth / 2),
           TRAFFIC_WORLD.curbHeight / 2,
@@ -401,7 +401,7 @@ function SidewalkCorner({
         <meshStandardMaterial color="#9ca0a0" roughness={0.9} />
       </mesh>
       <mesh
-        castShadow
+       
         position={[
           centerX,
           TRAFFIC_WORLD.curbHeight / 2,
@@ -454,7 +454,7 @@ function CornerCurb({
         z * (TRAFFIC_WORLD.roadWidth / 2 + 1.15),
       ]}
       rotation={[Math.PI / 2, rotationY, 0]}
-      castShadow
+     
     >
       <torusGeometry args={[1.15, 0.14, 8, 24, Math.PI / 2]} />
       <meshStandardMaterial color="#a5a7a5" roughness={0.9} />
@@ -465,16 +465,16 @@ function CornerCurb({
 function Tree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
   return (
     <group position={position} scale={scale}>
-      <mesh castShadow position={[0, 1.0, 0]}>
-        <cylinderGeometry args={[0.12, 0.17, 2, 10]} />
+      <mesh position={[0, 1.0, 0]}>
+        <cylinderGeometry args={[0.12, 0.17, 2, 7]} />
         <meshStandardMaterial color="#4c3322" roughness={1} />
       </mesh>
-      <mesh castShadow position={[0, 2.35, 0]}>
-        <sphereGeometry args={[1.0, 12, 10]} />
+      <mesh position={[0, 2.35, 0]}>
+        <sphereGeometry args={[1.0, 8, 6]} />
         <meshStandardMaterial color="#173e2b" roughness={0.95} />
       </mesh>
-      <mesh castShadow position={[0.55, 2.3, 0.15]}>
-        <sphereGeometry args={[0.65, 10, 8]} />
+      <mesh position={[0.55, 2.3, 0.15]}>
+        <sphereGeometry args={[0.65, 8, 6]} />
         <meshStandardMaterial color="#205038" roughness={0.95} />
       </mesh>
     </group>
@@ -484,7 +484,7 @@ function Tree({ position, scale = 1 }: { position: [number, number, number]; sca
 function Planter({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      <mesh receiveShadow castShadow position={[0, 0.24, 0]}>
+      <mesh position={[0, 0.24, 0]}>
         <boxGeometry args={[1.45, 0.48, 1.45]} />
         <meshStandardMaterial color="#4d5557" roughness={0.9} />
       </mesh>
@@ -492,8 +492,8 @@ function Planter({ position }: { position: [number, number, number] }) {
         <boxGeometry args={[1.15, 0.14, 1.15]} />
         <meshStandardMaterial color="#243126" roughness={1} />
       </mesh>
-      <mesh castShadow position={[0, 1.0, 0]}>
-        <sphereGeometry args={[0.62, 10, 8]} />
+      <mesh position={[0, 1.0, 0]}>
+        <sphereGeometry args={[0.62, 8, 6]} />
         <meshStandardMaterial color="#21492f" roughness={0.95} />
       </mesh>
     </group>
@@ -503,15 +503,14 @@ function Planter({ position }: { position: [number, number, number] }) {
 function StreetLamp({ position }: { position: [number, number, number] }) {
   return (
     <group position={position}>
-      <mesh castShadow position={[0, 1.75, 0]}>
-        <cylinderGeometry args={[0.045, 0.065, 3.5, 10]} />
+      <mesh position={[0, 1.75, 0]}>
+        <cylinderGeometry args={[0.045, 0.065, 3.5, 7]} />
         <meshStandardMaterial color="#252d32" metalness={0.72} roughness={0.35} />
       </mesh>
-      <mesh castShadow position={[0, 3.48, 0]}>
-        <sphereGeometry args={[0.14, 12, 10]} />
+      <mesh position={[0, 3.48, 0]}>
+        <sphereGeometry args={[0.14, 8, 6]} />
         <meshStandardMaterial color="#fff1c2" emissive="#ffd78a" emissiveIntensity={2.8} />
       </mesh>
-      <pointLight position={[0, 3.35, 0]} intensity={5} distance={8} color="#ffd990" />
     </group>
   )
 }
@@ -546,17 +545,17 @@ function RoadScene() {
   return (
     <>
       {/* World base */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.07, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.07, 0]}>
         <planeGeometry args={[70, TRAFFIC_WORLD.worldDepth]} />
         <meshStandardMaterial color="#10191e" roughness={0.99} />
       </mesh>
 
       {/* Asphalt roads crossing at 90 degrees */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[TRAFFIC_WORLD.roadLength, TRAFFIC_WORLD.roadWidth]} />
         <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
       </mesh>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
         <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.worldDepth]} />
         <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
       </mesh>
@@ -648,7 +647,7 @@ function RoadScene() {
       <ArrowMark position={[TRAFFIC_WORLD.eastboundLaneZ, 0, TRAFFIC_GEOMETRY.northStopLineZ + 4.0]} rotationY={Math.PI / 2} />
 
       {/* Clean center asphalt patch over line fragments */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
         <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.roadWidth]} />
         <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} />
       </mesh>
@@ -747,10 +746,11 @@ function TrafficCars({
         .sort((a, b) => b.progress - a.progress)
 
       const tail = flowCars.length ? flowCars[flowCars.length - 1] : null
-      const spawnClear = !tail || tail.progress > def.spawn + 8.5
-      const interval = flowId === 'eastbound' || flowId === 'westbound' ? 2.4 : 2.8
+      const spawnClear = !tail || tail.progress > def.spawn + 9.5
+      const interval = flowId === 'eastbound' || flowId === 'westbound' ? 3.2 : 3.6
+      const belowFlowLimit = flowCars.length < MAX_CARS_PER_FLOW
 
-      if (spawnClocks.current[flowId] >= interval && spawnClear) {
+      if (spawnClocks.current[flowId] >= interval && spawnClear && belowFlowLimit) {
         spawnClocks.current[flowId] = 0
         const id = idRef.current++
         const kind = KINDS[id % KINDS.length]
@@ -775,8 +775,6 @@ function TrafficCars({
         spawned = true
       }
     }
-
-    let brakingChanged = false
 
     for (const flowId of FLOW_ORDER) {
       const def = FLOW_DEFINITIONS[flowId]
@@ -814,9 +812,7 @@ function TrafficCars({
           }
         }
 
-        const previousBraking = car.braking
         car.braking = targetSpeed < car.speed - 0.12
-        if (car.braking !== previousBraking) brakingChanged = true
 
         const accel = targetSpeed > car.speed ? 2.0 : 5.4
         car.speed = Math.max(
@@ -831,12 +827,32 @@ function TrafficCars({
           const [x, y, z] = def.toWorld(car.progress)
           group.position.set(x, y, z)
           const wheelSpin = car.speed * delta / 0.34
-          group.traverse((child) => {
-            if (child.userData.wheelRoot) {
-              // CarConcept's wheel axle is local X. Rotating Z made the wheels wobble sideways.
-              child.rotateX(wheelSpin)
+
+          let wheels = group.userData.cachedWheels as THREE.Object3D[] | undefined
+          let brakeLamps = group.userData.cachedBrakeLamps as THREE.Mesh[] | undefined
+
+          if (!wheels || !brakeLamps) {
+            wheels = []
+            brakeLamps = []
+            group.traverse((child) => {
+              if (child.userData.wheelRoot) wheels?.push(child)
+              if (child instanceof THREE.Mesh && child.userData.brakeLamp) {
+                brakeLamps?.push(child)
+              }
+            })
+            group.userData.cachedWheels = wheels
+            group.userData.cachedBrakeLamps = brakeLamps
+          }
+
+          for (const wheel of wheels) wheel.rotateX(wheelSpin)
+
+          const brakeColor = car.braking ? '#ff2b30' : '#5a1114'
+          for (const lamp of brakeLamps) {
+            const material = lamp.material
+            if (material instanceof THREE.MeshBasicMaterial) {
+              material.color.set(brakeColor)
             }
-          })
+          }
         }
       })
     }
@@ -848,7 +864,7 @@ function TrafficCars({
 
     carsRef.current = alive
 
-    if (spawned || removed || brakingChanged) {
+    if (spawned || removed) {
       setCars(alive.map((car) => ({ ...car })))
     }
   })
@@ -868,7 +884,7 @@ function TrafficCars({
             rotation={[0, def.rotationY, 0]}
           >
             <Suspense fallback={null}>
-              <RealisticCarModel variant={car.variant} color={car.color} braking={car.braking} />
+              <RealisticCarModel variant={car.variant} color={car.color} />
             </Suspense>
           </group>
         )
@@ -916,7 +932,7 @@ function Scene({
       <ambientLight intensity={0.58} />
       <hemisphereLight args={['#8ec8e8', '#172025', 0.72]} />
       <directionalLight
-        castShadow
+       
         position={[15, 24, 12]}
         intensity={1.55}
         color="#e0f2ff"
