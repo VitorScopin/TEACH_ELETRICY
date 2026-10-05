@@ -12,9 +12,12 @@ import type { IntersectionTrafficState, SignalId, TrafficState } from '../types'
 
 type FlowId = 'eastbound' | 'westbound' | 'northbound' | 'southbound'
 
+type VehicleVariant = 'concept' | 'ferrari' | 'lc80' | 'sport'
+
 type CarData = {
   id: number
   kind: VehicleKind
+  variant: VehicleVariant
   color: string
   flow: FlowId
   progress: number
@@ -32,26 +35,61 @@ type TrafficSimulation3DProps = {
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
 const KINDS: VehicleKind[] = ['sedan']
 
-const REALISTIC_CAR_URL =
-  'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CarConcept/glTF-Binary/CarConcept.glb'
+const VEHICLE_MODELS: Record<
+  VehicleVariant,
+  { url: string; length: number; paintable: boolean }
+> = {
+  concept: {
+    url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CarConcept/glTF-Binary/CarConcept.glb',
+    length: 4.55,
+    paintable: true,
+  },
+  ferrari: {
+    url: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/ferrari.glb',
+    length: 4.53,
+    paintable: true,
+  },
+  lc80: {
+    url: './models/vehicles/lc80.glb',
+    length: 4.82,
+    paintable: false,
+  },
+  sport: {
+    url: './models/vehicles/red-car.glb',
+    length: 4.38,
+    paintable: false,
+  },
+}
+
+const VEHICLE_VARIANTS: VehicleVariant[] = ['concept', 'ferrari', 'lc80', 'sport']
+
+function isWheelRoot(object: THREE.Object3D) {
+  if (/^Wheel(?:Front|Rear)[LR]$/i.test(object.name)) return true
+  if (/^wheel_(?:fl|fr|rl|rr)$/i.test(object.name)) return true
+
+  const wheelName = /wheel|tire|tyre/i
+  return !object.isMesh && wheelName.test(object.name) && !wheelName.test(object.parent?.name ?? '')
+}
 
 function RealisticCarModel({
+  variant,
   color,
   braking,
 }: {
+  variant: VehicleVariant
   color: string
   braking: boolean
 }) {
-  const { scene } = useGLTF(REALISTIC_CAR_URL)
+  const definition = VEHICLE_MODELS[variant]
+  const { scene } = useGLTF(definition.url)
 
   const normalized = useMemo(() => {
     const model = scene.clone(true)
 
     model.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) {
-        if (/^Wheel(?:Front|Rear)[LR]$/.test(child.name)) child.userData.wheelRoot = true
-        return
-      }
+      if (isWheelRoot(child)) child.userData.wheelRoot = true
+
+      if (!(child instanceof THREE.Mesh)) return
 
       child.castShadow = true
       child.receiveShadow = true
@@ -62,25 +100,31 @@ function RealisticCarModel({
 
         if (clone instanceof THREE.MeshStandardMaterial) {
           const materialName = clone.name ?? ''
+          const meshName = child.name ?? ''
+          const isPaint =
+            definition.paintable &&
+            (/^Paint\s/i.test(materialName) ||
+              /^body$/i.test(meshName) ||
+              /body.?paint|car.?paint/i.test(materialName))
 
-          if (/^Paint\s/i.test(materialName)) {
+          if (isPaint) {
             clone.color = new THREE.Color(color)
-            clone.metalness = Math.max(clone.metalness, 0.45)
-            clone.roughness = Math.min(clone.roughness, 0.24)
+            clone.metalness = Math.max(clone.metalness, 0.42)
+            clone.roughness = Math.min(clone.roughness, 0.28)
 
             if (clone instanceof THREE.MeshPhysicalMaterial) {
-              clone.clearcoat = Math.max(clone.clearcoat, 0.82)
-              clone.clearcoatRoughness = Math.min(clone.clearcoatRoughness, 0.16)
+              clone.clearcoat = Math.max(clone.clearcoat, 0.8)
+              clone.clearcoatRoughness = Math.min(clone.clearcoatRoughness, 0.18)
             }
           }
 
-          if (/Brakelight/i.test(materialName)) {
+          if (/brake.?light|taillight/i.test(materialName) || /brake.?light|taillight/i.test(meshName)) {
             clone.emissive = new THREE.Color('#ff2020')
-            clone.emissiveIntensity = braking ? 6.5 : 1.5
+            clone.emissiveIntensity = braking ? 6.2 : 1.4
           }
 
-          if (/Headlight/i.test(materialName)) {
-            clone.emissiveIntensity = Math.max(clone.emissiveIntensity, 2.2)
+          if (/headlight/i.test(materialName) || /headlight/i.test(meshName)) {
+            clone.emissiveIntensity = Math.max(clone.emissiveIntensity, 2.0)
           }
         }
 
@@ -95,10 +139,8 @@ function RealisticCarModel({
     const bounds = new THREE.Box3().setFromObject(model)
     const size = bounds.getSize(new THREE.Vector3())
     const center = bounds.getCenter(new THREE.Vector3())
-
-    const targetLength = VEHICLE_DIMENSIONS.sedan.length
     const rawLength = Math.max(size.x, size.z, 0.001)
-    const scale = targetLength / rawLength
+    const scale = definition.length / rawLength
     const rotationY = size.z > size.x ? Math.PI / 2 : 0
 
     return {
@@ -107,7 +149,7 @@ function RealisticCarModel({
       rotationY,
       offset: new THREE.Vector3(-center.x, -bounds.min.y, -center.z),
     }
-  }, [scene, color, braking])
+  }, [scene, definition, color, braking])
 
   return (
     <group>
@@ -118,7 +160,9 @@ function RealisticCarModel({
   )
 }
 
-useGLTF.preload(REALISTIC_CAR_URL)
+for (const definition of Object.values(VEHICLE_MODELS)) {
+  useGLTF.preload(definition.url)
+}
 
 function SignalHead({ traffic }: { traffic: TrafficState }) {
   const lamps = [
@@ -691,19 +735,21 @@ function TrafficCars({
         spawnClocks.current[flowId] = 0
         const id = idRef.current++
         const kind = KINDS[id % KINDS.length]
-        const dims = VEHICLE_DIMENSIONS[kind]
+        const variant = VEHICLE_VARIANTS[id % VEHICLE_VARIANTS.length]
+        const model = VEHICLE_MODELS[variant]
 
         workingCars = [
           ...workingCars,
           {
             id,
             kind,
+            variant,
             color: COLORS[id % COLORS.length],
             flow: flowId,
             progress: def.spawn,
             speed: 0,
             desiredSpeed: 5.6 + (id % 4) * 0.42,
-            length: dims.length,
+            length: model.length,
             braking: false,
           },
         ]
@@ -803,7 +849,7 @@ function TrafficCars({
             rotation={[0, def.rotationY, 0]}
           >
             <Suspense fallback={null}>
-              <RealisticCarModel color={car.color} braking={car.braking} />
+              <RealisticCarModel variant={car.variant} color={car.color} braking={car.braking} />
             </Suspense>
           </group>
         )
