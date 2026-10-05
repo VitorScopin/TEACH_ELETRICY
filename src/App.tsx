@@ -665,6 +665,25 @@ function App() {
                         <span>Pré-configurado com o mesmo perfil do Nextron Core: <b>CoDeSys.OPC.DA</b> • PLC_GW3 • Application • GVL_NEXTRON_ROBOT. Preencha apenas as tags que quiser acompanhar; campos vazios são ignorados.</span>
                       </div>
 
+                      <div className="mastertool-sim-preset">
+                        <div className="mastertool-sim-head">
+                          <div>
+                            <span>PRESET OFICIAL ALTUS</span>
+                            <strong>MasterTool em modo Simulação</strong>
+                          </div>
+                          <b>SIMULAÇÃO</b>
+                        </div>
+                        <div className="mastertool-sim-grid">
+                          <div><span>Active IP</span><strong>127.0.0.1</strong></div>
+                          <div><span>Device Port</span><strong>11739</strong></div>
+                          <div><span>OPC Server</span><strong>CoDeSys.OPC.DA</strong></div>
+                        </div>
+                        <small>
+                          No MasterTool: Comunicação → Simulação → Login/Run → Comunicação → Configuração OPC.
+                          O 127.0.0.1 é do simulador OPC DA do próprio PC e não tem relação com o endereço do Vite.
+                        </small>
+                      </div>
+
                       <div className="drawer-fields two">
                         <label>
                           ProgID
