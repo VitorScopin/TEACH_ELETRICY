@@ -101,6 +101,36 @@ const buildSimulationSignals = (main: TrafficState): IntersectionTrafficState =>
   south: oppositeState(main),
 })
 
+const sameTrafficState = (a: TrafficState, b: TrafficState) =>
+  a.red === b.red && a.yellow === b.yellow && a.green === b.green
+
+const sameIntersectionState = (
+  a: IntersectionTrafficState,
+  b: IntersectionTrafficState,
+) =>
+  (['west', 'east', 'north', 'south'] as SignalId[]).every((signalId) =>
+    sameTrafficState(a[signalId], b[signalId]),
+  )
+
+function PhaseElapsedDisplay({
+  startedAt,
+  durationMs,
+}: {
+  startedAt: number
+  durationMs: number
+}) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    const update = () => setElapsed((Date.now() - startedAt) / 1000)
+    update()
+    const timer = window.setInterval(update, 500)
+    return () => window.clearInterval(timer)
+  }, [startedAt])
+
+  return <strong>{elapsed.toFixed(1)} s / {durationMs / 1000} s</strong>
+}
+
 const stateLabel: Record<string, string> = {
   red: 'VERMELHO',
   yellow: 'AMARELO',
@@ -124,10 +154,10 @@ function App() {
   const [connectionMessage, setConnectionMessage] = useState('Ambiente virtual pronto')
   const [seenStates, setSeenStates] = useState(() => new Set<string>())
   const [phaseStartedAt, setPhaseStartedAt] = useState(Date.now())
-  const [phaseElapsed, setPhaseElapsed] = useState(0)
   const [timingPass, setTimingPass] = useState(() => new Set<string>())
   const [sequenceFault, setSequenceFault] = useState(false)
   const previousState = useRef('')
+  const signalsRef = useRef(signals)
   const lastPhase = useRef<TrafficKey | null>(null)
   const phaseStartedAtRef = useRef(Date.now())
   const steps = trafficLightProject.sequence
@@ -149,12 +179,24 @@ function App() {
     const poll = async () => {
       const result = await window.teachElectrify?.plc.readTraffic()
       if (result?.ok && result.values) {
-        setSignals(result.values)
-        setTraffic(result.values.west)
-        setConnectionMessage(
+        const nextSignals = result.values
+
+        if (!sameIntersectionState(signalsRef.current, nextSignals)) {
+          signalsRef.current = nextSignals
+          setSignals(nextSignals)
+
+          setTraffic((current) =>
+            sameTrafficState(current, nextSignals.west) ? current : nextSignals.west,
+          )
+        }
+
+        const onlineMessage =
           config.protocol === 'opcua'
             ? 'Altus OPC UA conectado • 4 semáforos independentes'
-            : 'Siemens S7 conectado • 4 semáforos independentes',
+            : 'Siemens S7 conectado • 4 semáforos independentes'
+
+        setConnectionMessage((current) =>
+          current === onlineMessage ? current : onlineMessage,
         )
       } else if (result) {
         setConnectionMessage(result.message || 'Falha na leitura do PLC')
@@ -198,11 +240,6 @@ function App() {
       setSeenStates((current) => new Set(current).add(currentKey))
     }
   }, [traffic, activeLights, steps])
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setPhaseElapsed((Date.now() - phaseStartedAt) / 1000), 100)
-    return () => window.clearInterval(timer)
-  }, [phaseStartedAt])
 
   const allPhasesSeen = seenStates.size === 3
   const safeNow = activeLights.length === 1
@@ -449,7 +486,13 @@ function App() {
                         : 'Simulador interno'}
                     </strong>
                   </div>
-                  <div><span>Tempo fase</span><strong>{phaseElapsed.toFixed(1)} s / {(steps[phase]?.durationMs ?? 0) / 1000} s</strong></div>
+                  <div>
+                    <span>Tempo fase</span>
+                    <PhaseElapsedDisplay
+                      startedAt={phaseStartedAt}
+                      durationMs={steps[phase]?.durationMs ?? 0}
+                    />
+                  </div>
                   <div><span>Scan do PLC</span><strong>{mode === 'plc' ? '250 ms' : 'LOCAL'}</strong></div>
                 </div>
 
