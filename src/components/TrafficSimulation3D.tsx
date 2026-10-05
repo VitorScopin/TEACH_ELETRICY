@@ -68,7 +68,7 @@ function isWheelRoot(object: THREE.Object3D) {
   if (/^wheel_(?:fl|fr|rl|rr)$/i.test(object.name)) return true
 
   const wheelName = /wheel|tire|tyre/i
-  return !object.isMesh && wheelName.test(object.name) && !wheelName.test(object.parent?.name ?? '')
+  return !(object instanceof THREE.Mesh) && wheelName.test(object.name) && !wheelName.test(object.parent?.name ?? '')
 }
 
 function RealisticCarModel({
