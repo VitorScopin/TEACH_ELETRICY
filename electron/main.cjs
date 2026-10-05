@@ -1,13 +1,14 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('node:path')
 const nodes7 = require('nodes7')
-const {
-  OPCUAClient,
-  AttributeIds,
-  MessageSecurityMode,
-  SecurityPolicy,
-  UserTokenType,
-} = require('node-opcua')
+let opcUaModule = null
+
+function getOpcUa() {
+  if (!opcUaModule) {
+    opcUaModule = require('node-opcua')
+  }
+  return opcUaModule
+}
 
 let plc = null
 let opcClient = null
@@ -94,6 +95,13 @@ function normalizeTags(source, fallback) {
 }
 
 async function connectOpcUa(config) {
+  const {
+    OPCUAClient,
+    MessageSecurityMode,
+    SecurityPolicy,
+    UserTokenType,
+  } = getOpcUa()
+
   const endpoint = config.opcEndpoint || `opc.tcp://${config.host || '192.168.15.1'}:4840`
   const securityMode =
     MessageSecurityMode[config.opcSecurityMode] ?? MessageSecurityMode.None
@@ -227,6 +235,7 @@ ipcMain.handle('plc:update-opc-tags', async (_event, opcTags) => {
 })
 
 ipcMain.handle('plc:test-opc-node', async (_event, nodeId) => {
+  const { AttributeIds } = getOpcUa()
   if (!plcConnected || activeConfig?.protocol !== 'opcua' || !opcSession) {
     return { ok: false, message: 'Conecte ao servidor OPC UA para testar a tag' }
   }
@@ -272,6 +281,7 @@ ipcMain.handle('plc:test-opc-node', async (_event, nodeId) => {
 })
 
 async function readOpcTraffic() {
+  const { AttributeIds } = getOpcUa()
   const tags = activeConfig?.opcTags
   if (!opcSession || !tags) {
     return { ok: false, message: 'Sessão OPC UA indisponível' }
