@@ -29,12 +29,12 @@ type CarData = {
 type TrafficSimulation3DProps = {
   signals: IntersectionTrafficState
   running: boolean
+  quality: 'low' | 'medium' | 'high'
+  targetFps: number
 }
 
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
 const KINDS: VehicleKind[] = ['sedan']
-const MAX_CARS_PER_FLOW = 2
-const TARGET_FRAME_MS = 50
 
 const VEHICLE_MODELS: Record<
   VehicleVariant,
@@ -536,7 +536,7 @@ function UrbanProps() {
   )
 }
 
-function RoadScene() {
+function RoadScene({ quality }: { quality: 'low' | 'medium' | 'high' }) {
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
   const lane = TRAFFIC_WORLD.laneWidth
   const dashX = [-29, -25, -21, -17, -13, 13, 17, 21, 25, 29]
@@ -652,8 +652,8 @@ function RoadScene() {
         <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} />
       </mesh>
 
-      <UrbanProps />
-      <CityBlocks />
+      {quality !== 'low' && <UrbanProps />}
+      {quality === 'high' && <CityBlocks />}
     </>
   )
 }
@@ -732,9 +732,11 @@ function applyWorldPosition(group: THREE.Group, flowId: FlowId, progress: number
 function TrafficCars({
   signals,
   running,
+  maxCarsPerFlow,
 }: {
   signals: IntersectionTrafficState
   running: boolean
+  maxCarsPerFlow: number
 }) {
   const [cars, setCars] = useState<CarData[]>([])
   const carsRef = useRef<CarData[]>([])
@@ -779,7 +781,7 @@ function TrafficCars({
       const tail = flowCars.length ? flowCars[flowCars.length - 1] : null
       const spawnClear = !tail || tail.progress > def.spawn + 10.5
       const interval = flowId === 'eastbound' || flowId === 'westbound' ? 3.8 : 4.2
-      const belowFlowLimit = flowCars.length < MAX_CARS_PER_FLOW
+      const belowFlowLimit = flowCars.length < maxCarsPerFlow
 
       if (spawnClocks.current[flowId] >= interval && spawnClear && belowFlowLimit) {
         spawnClocks.current[flowId] = 0
@@ -921,7 +923,7 @@ function TrafficCars({
   )
 }
 
-function RenderLimiter({ active }: { active: boolean }) {
+function RenderLimiter({ active, targetFps }: { active: boolean; targetFps: number }) {
   const invalidate = useThree((state) => state.invalidate)
 
   useEffect(() => {
@@ -931,7 +933,8 @@ function RenderLimiter({ active }: { active: boolean }) {
 
     const start = () => {
       if (document.hidden || timer) return
-      timer = window.setInterval(() => invalidate(), TARGET_FRAME_MS)
+      const frameMs = Math.max(16, Math.round(1000 / Math.max(1, targetFps)))
+      timer = window.setInterval(() => invalidate(), frameMs)
     }
 
     const stop = () => {
@@ -952,7 +955,7 @@ function RenderLimiter({ active }: { active: boolean }) {
       stop()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [active, invalidate])
+  }, [active, invalidate, targetFps])
 
   return null
 }
@@ -960,9 +963,11 @@ function RenderLimiter({ active }: { active: boolean }) {
 function Scene({
   signals,
   running,
+  quality,
 }: {
   signals: IntersectionTrafficState
   running: boolean
+  quality: 'low' | 'medium' | 'high'
 }) {
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
   const sidewalkSignalOffset = halfRoad + 0.9
@@ -1001,7 +1006,7 @@ function Scene({
         color="#e0f2ff"
       />
 
-      <RoadScene />
+      <RoadScene quality={quality} />
 
       {/* Four correctly placed approach signals */}
       <TrafficLight3D traffic={signals.west} position={westSignal} rotationY={Math.PI / 2} />
@@ -1009,7 +1014,7 @@ function Scene({
       <TrafficLight3D traffic={signals.south} position={southSignal} rotationY={0} />
       <TrafficLight3D traffic={signals.north} position={northSignal} rotationY={Math.PI} />
 
-      <TrafficCars signals={signals} running={running} />
+      <TrafficCars signals={signals} running={running} maxCarsPerFlow={quality === 'low' ? 1 : quality === 'medium' ? 2 : 3} />
 
       <OrbitControls
         makeDefault
@@ -1031,23 +1036,26 @@ function Scene({
 export function TrafficSimulation3D({
   signals,
   running,
+  quality,
+  targetFps,
 }: TrafficSimulation3DProps) {
   return (
     <div className="traffic-3d-root">
       <Canvas
+        key={quality}
         frameloop="demand"
-        dpr={1}
+        dpr={quality === 'low' ? 0.8 : quality === 'medium' ? 1 : 1.25}
         camera={{ position: [20, 19, 25], fov: 48 }}
         gl={{
-          antialias: false,
+          antialias: quality === 'high',
           alpha: false,
           powerPreference: 'high-performance',
           stencil: false,
           depth: true,
         }}
       >
-        <RenderLimiter active={running} />
-        <Scene signals={signals} running={running} />
+        <RenderLimiter active={running} targetFps={targetFps} />
+        <Scene signals={signals} running={running} quality={quality} />
       </Canvas>
 
       <div className="traffic-3d-label">
