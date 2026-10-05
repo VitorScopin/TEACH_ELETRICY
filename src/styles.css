@@ -2149,3 +2149,19 @@ main {
     grid-template-columns:1fr;
   }
 }
+
+
+/* --- Optional OPC DA mappings --- */
+.drawer-opc-row.unmapped {
+  opacity:.5;
+}
+.drawer-opc-row.unmapped input {
+  border-style:dashed;
+  color:#78919b;
+}
+.drawer-opc-row.unmapped b {
+  color:#607883;
+}
+.drawer-opc-row.mapped {
+  background:linear-gradient(90deg,rgba(33,176,148,.045),transparent 60%);
+}
