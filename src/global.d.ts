@@ -1,4 +1,4 @@
-import type { PlcConfig, TrafficState } from './types'
+import type { IntersectionTrafficState, PlcConfig } from './types'
 
 export {}
 
@@ -11,7 +11,7 @@ declare global {
         readTraffic: () => Promise<{
           ok: boolean
           message?: string
-          values?: TrafficState
+          values?: IntersectionTrafficState
           at?: number
         }>
         status: () => Promise<{ connected: boolean; config?: PlcConfig | null }>
