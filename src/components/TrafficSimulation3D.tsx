@@ -8,7 +8,7 @@ import {
   VEHICLE_DIMENSIONS,
   type VehicleKind,
 } from '../simulation/trafficWorld'
-import type { TrafficState } from '../types'
+import type { IntersectionTrafficState, SignalId, TrafficState } from '../types'
 
 type FlowId = 'eastbound' | 'westbound' | 'northbound' | 'southbound'
 
@@ -25,10 +25,8 @@ type CarData = {
 }
 
 type TrafficSimulation3DProps = {
-  traffic: TrafficState
+  signals: IntersectionTrafficState
   running: boolean
-  phaseElapsed: number
-  phaseDuration: number
 }
 
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
@@ -51,7 +49,7 @@ function RealisticCarModel({
 
     model.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) {
-        if (/^Wheel/i.test(child.name)) child.userData.wheel = true
+        if (/^Wheel(?:Front|Rear)[LR]$/.test(child.name)) child.userData.wheelRoot = true
         return
       }
 
@@ -604,7 +602,7 @@ type FlowDefinition = {
   exit: number
   stopProgress: number
   rotationY: number
-  signalGroup: 'main' | 'cross'
+  signalId: SignalId
   toWorld: (progress: number) => [number, number, number]
 }
 
@@ -618,7 +616,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
     exit: TRAFFIC_WORLD.exitX,
     stopProgress: TRAFFIC_GEOMETRY.westStopLineX,
     rotationY: 0,
-    signalGroup: 'main',
+    signalId: 'west',
     toWorld: (progress) => [progress, 0.02, TRAFFIC_WORLD.eastboundLaneZ],
   },
   westbound: {
@@ -627,7 +625,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
     exit: TRAFFIC_WORLD.exitX,
     stopProgress: -TRAFFIC_GEOMETRY.eastStopLineX,
     rotationY: Math.PI,
-    signalGroup: 'main',
+    signalId: 'east',
     toWorld: (progress) => [-progress, 0.02, TRAFFIC_WORLD.westboundLaneZ],
   },
   northbound: {
@@ -636,7 +634,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
     exit: VERTICAL_EXIT,
     stopProgress: -TRAFFIC_GEOMETRY.northStopLineZ,
     rotationY: Math.PI / 2,
-    signalGroup: 'cross',
+    signalId: 'north',
     toWorld: (progress) => [TRAFFIC_WORLD.eastboundLaneZ, 0.02, -progress],
   },
   southbound: {
@@ -645,7 +643,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
     exit: VERTICAL_EXIT,
     stopProgress: TRAFFIC_GEOMETRY.southStopLineZ,
     rotationY: -Math.PI / 2,
-    signalGroup: 'cross',
+    signalId: 'south',
     toWorld: (progress) => [-TRAFFIC_WORLD.eastboundLaneZ, 0.02, progress],
   },
 }
@@ -653,12 +651,10 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
 const FLOW_ORDER: FlowId[] = ['eastbound', 'westbound', 'northbound', 'southbound']
 
 function TrafficCars({
-  mainTraffic,
-  crossTraffic,
+  signals,
   running,
 }: {
-  mainTraffic: TrafficState
-  crossTraffic: TrafficState
+  signals: IntersectionTrafficState
   running: boolean
 }) {
   const [cars, setCars] = useState<CarData[]>([])
@@ -719,7 +715,7 @@ function TrafficCars({
 
     for (const flowId of FLOW_ORDER) {
       const def = FLOW_DEFINITIONS[flowId]
-      const signal = def.signalGroup === 'main' ? mainTraffic : crossTraffic
+      const signal = signals[def.signalId]
       const flowCars = workingCars
         .filter((car) => car.flow === flowId)
         .sort((a, b) => b.progress - a.progress)
@@ -771,7 +767,10 @@ function TrafficCars({
           group.position.set(x, y, z)
           const wheelSpin = car.speed * delta / 0.34
           group.traverse((child) => {
-            if (child.userData.wheel) child.rotation.z -= wheelSpin
+            if (child.userData.wheelRoot) {
+              // CarConcept's wheel axle is local X. Rotating Z made the wheels wobble sideways.
+              child.rotateX(wheelSpin)
+            }
           })
         }
       })
@@ -813,50 +812,15 @@ function TrafficCars({
   )
 }
 
-function buildCrossTraffic(
-  mainTraffic: TrafficState,
-  phaseElapsed: number,
-  phaseDuration: number,
-): TrafficState {
-  if (mainTraffic.green || mainTraffic.yellow) {
-    return { red: true, yellow: false, green: false }
-  }
-
-  if (!mainTraffic.red) {
-    return { red: true, yellow: false, green: false }
-  }
-
-  const yellowWindow = 1.2
-  const allRedWindow = 0.8
-  const yellowStart = Math.max(0, phaseDuration - yellowWindow - allRedWindow)
-  const allRedStart = Math.max(yellowStart, phaseDuration - allRedWindow)
-
-  if (phaseElapsed >= allRedStart) {
-    return { red: true, yellow: false, green: false }
-  }
-
-  if (phaseElapsed >= yellowStart) {
-    return { red: false, yellow: true, green: false }
-  }
-
-  return { red: false, yellow: false, green: true }
-}
-
 function Scene({
-  traffic,
+  signals,
   running,
-  phaseElapsed,
-  phaseDuration,
 }: {
-  traffic: TrafficState
+  signals: IntersectionTrafficState
   running: boolean
-  phaseElapsed: number
-  phaseDuration: number
 }) {
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
   const sidewalkSignalOffset = halfRoad + 0.9
-
-  const crossTraffic = buildCrossTraffic(traffic, phaseElapsed, phaseDuration)
 
   const westSignal: [number, number, number] = [
     TRAFFIC_GEOMETRY.westStopLineX - 0.35,
@@ -900,12 +864,12 @@ function Scene({
       <RoadScene />
 
       {/* Four correctly placed approach signals */}
-      <TrafficLight3D traffic={traffic} position={westSignal} rotationY={Math.PI / 2} />
-      <TrafficLight3D traffic={traffic} position={eastSignal} rotationY={-Math.PI / 2} />
-      <TrafficLight3D traffic={crossTraffic} position={southSignal} rotationY={0} />
-      <TrafficLight3D traffic={crossTraffic} position={northSignal} rotationY={Math.PI} />
+      <TrafficLight3D traffic={signals.west} position={westSignal} rotationY={Math.PI / 2} />
+      <TrafficLight3D traffic={signals.east} position={eastSignal} rotationY={-Math.PI / 2} />
+      <TrafficLight3D traffic={signals.south} position={southSignal} rotationY={0} />
+      <TrafficLight3D traffic={signals.north} position={northSignal} rotationY={Math.PI} />
 
-      <TrafficCars mainTraffic={traffic} crossTraffic={crossTraffic} running={running} />
+      <TrafficCars signals={signals} running={running} />
 
       <OrbitControls
         makeDefault
@@ -927,10 +891,8 @@ function Scene({
 }
 
 export function TrafficSimulation3D({
-  traffic,
+  signals,
   running,
-  phaseElapsed,
-  phaseDuration,
 }: TrafficSimulation3DProps) {
   return (
     <div className="traffic-3d-root">
@@ -940,12 +902,7 @@ export function TrafficSimulation3D({
         camera={{ position: [20, 19, 25], fov: 48 }}
         gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       >
-        <Scene
-          traffic={traffic}
-          running={running}
-          phaseElapsed={phaseElapsed}
-          phaseDuration={phaseDuration}
-        />
+        <Scene signals={signals} running={running} />
       </Canvas>
 
       <div className="traffic-3d-label">
