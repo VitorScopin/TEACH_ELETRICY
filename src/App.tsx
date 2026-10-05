@@ -51,6 +51,13 @@ const defaultOpcTags: PlcConfig['opcTags'] = {
   south: { red: '', yellow: '', green: '' },
 }
 
+const defaultOpcDaTags: PlcConfig['opcDaTags'] = {
+  west: { red: 'OESTE_VERMELHO', yellow: 'OESTE_AMARELO', green: 'OESTE_VERDE' },
+  east: { red: 'LESTE_VERMELHO', yellow: 'LESTE_AMARELO', green: 'LESTE_VERDE' },
+  north: { red: 'NORTE_VERMELHO', yellow: 'NORTE_AMARELO', green: 'NORTE_VERDE' },
+  south: { red: 'SUL_VERMELHO', yellow: 'SUL_AMARELO', green: 'SUL_VERDE' },
+}
+
 const defaultConfig: PlcConfig = {
   protocol: 's7',
   ...trafficLightProject.defaultConnection,
@@ -66,6 +73,14 @@ const defaultConfig: PlcConfig = {
   opcUsername: '',
   opcPassword: '',
   opcTags: defaultOpcTags,
+  opcDaProgId: 'CoDeSys.OPC.DA',
+  opcDaHost: '',
+  opcDaArchitecture: 'auto',
+  opcDaPlcName: 'PLC_GW3',
+  opcDaApplicationName: 'Application',
+  opcDaGvlName: 'GVL_SEMAFORO',
+  opcDaTimeout: 3000,
+  opcDaTags: defaultOpcDaTags,
 }
 
 const lightToState = (key: TrafficKey): TrafficState => ({
@@ -115,6 +130,9 @@ function PhaseElapsedDisplay({
 
   return <strong>{elapsed.toFixed(1)} s / {durationMs / 1000} s</strong>
 }
+
+const protocolLabel = (protocol: PlcConfig['protocol']) =>
+  protocol === 'opcua' ? 'ALTUS OPC UA' : protocol === 'opcda' ? 'ALTUS OPC DA' : 'SIEMENS S7'
 
 const stateLabel: Record<string, string> = {
   red: 'VERMELHO',
@@ -191,7 +209,9 @@ function App() {
         const onlineMessage =
           config.protocol === 'opcua'
             ? 'Altus OPC UA conectado • 4 semáforos independentes'
-            : 'Siemens S7 conectado • 4 semáforos independentes'
+            : config.protocol === 'opcda'
+              ? 'Altus OPC DA conectado • 4 semáforos independentes'
+              : 'Siemens S7 conectado • 4 semáforos independentes'
 
         setConnectionMessage((current) =>
           current === onlineMessage ? current : onlineMessage,
@@ -260,7 +280,9 @@ function App() {
       result.ok
         ? config.protocol === 'opcua'
           ? 'Altus OPC UA conectado'
-          : 'Siemens S7 conectado'
+          : config.protocol === 'opcda'
+            ? 'Altus OPC DA conectado'
+            : 'Siemens S7 conectado'
         : result.message || 'Falha ao conectar',
     )
   }
@@ -342,6 +364,48 @@ function App() {
     }
   }
 
+  const testOpcDaTag = async (signalId: SignalId, lightKey: TrafficKey) => {
+    const key = `opcda:${signalId}:${lightKey}`
+    setOpcTagTests((current) => ({ ...current, [key]: { loading: true } }))
+
+    const result = await window.teachElectrify?.plc.testOpcDaTag(signalId, lightKey)
+    if (!result) {
+      setOpcTagTests((current) => ({
+        ...current,
+        [key]: { loading: false, ok: false, message: 'Use o app pelo Electron' },
+      }))
+      return
+    }
+
+    setOpcTagTests((current) => ({
+      ...current,
+      [key]: {
+        loading: false,
+        ok: result.ok,
+        value: result.value,
+        message: result.message,
+      },
+    }))
+
+    if (result.ok && typeof result.value === 'boolean') {
+      const nextSignals: IntersectionTrafficState = {
+        ...signals,
+        [signalId]: {
+          ...signals[signalId],
+          [lightKey]: result.value,
+        },
+      }
+      signalsRef.current = nextSignals
+      setSignals(nextSignals)
+      if (signalId === 'west') setTraffic(nextSignals.west)
+      setConnectionMessage(
+        `Teste OPC DA: ${signalId.toUpperCase()} / ${lightKey.toUpperCase()} = ${result.value ? 'TRUE' : 'FALSE'}`,
+      )
+    } else {
+      setConnectionMessage(result.message || 'Falha ao testar tag OPC DA')
+    }
+  }
+
   const resetLab = () => {
     setSeenStates(new Set())
     setTimingPass(new Set())
@@ -367,7 +431,7 @@ function App() {
         <div className="app-titlebar-drag">
           <span>SEMÁFORO INTELIGENTE</span>
           <i />
-          <small>{connected ? (config.protocol === 'opcua' ? 'ALTUS OPC UA' : 'SIEMENS S7') : 'SIMULAÇÃO LOCAL'}</small>
+          <small>{connected ? protocolLabel(config.protocol) : 'SIMULAÇÃO LOCAL'}</small>
         </div>
 
         <div className="app-titlebar-actions">
@@ -442,11 +506,7 @@ function App() {
             <div>
               <span>Fonte</span>
               <strong>
-                {mode === 'plc'
-                  ? config.protocol === 'opcua'
-                    ? 'ALTUS OPC UA'
-                    : 'SIEMENS S7'
-                  : 'SIMULAÇÃO'}
+                {mode === 'plc' ? protocolLabel(config.protocol) : 'SIMULAÇÃO'}
               </strong>
             </div>
             <div>
@@ -492,6 +552,18 @@ function App() {
                       <div>
                         <strong>Siemens S7</strong>
                         <span>ISO-on-TCP / porta 102</span>
+                      </div>
+                      <i />
+                    </button>
+                    <button
+                      className={config.protocol === 'opcda' ? 'active' : ''}
+                      disabled={connected}
+                      onClick={() => setConfig({...config, protocol:'opcda'})}
+                    >
+                      <Cable size={19} />
+                      <div>
+                        <strong>Altus OPC DA</strong>
+                        <span>CoDeSys.OPC.DA / bridge Windows</span>
                       </div>
                       <i />
                     </button>
@@ -564,6 +636,140 @@ function App() {
                             ))}
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  ) : config.protocol === 'opcda' ? (
+                    <div className="drawer-section">
+                      <div className="drawer-section-title">
+                        <span>ALTUS • MESMA ARQUITETURA DO NEXTRON CORE</span>
+                        <strong>OPC DA / CoDeSys</strong>
+                      </div>
+
+                      <div className="opcda-core-note">
+                        <strong>Bridge OPC DA Windows</strong>
+                        <span>Usa GodSharp.Opc.Da com o servidor <b>CoDeSys.OPC.DA</b>, igual ao Nextron Core. O TEACH tenta bridge x64/x86 conforme a arquitetura selecionada.</span>
+                      </div>
+
+                      <div className="drawer-fields two">
+                        <label>
+                          ProgID
+                          <input
+                            value={config.opcDaProgId}
+                            onChange={(e)=>setConfig({...config,opcDaProgId:e.target.value})}
+                            placeholder="CoDeSys.OPC.DA"
+                          />
+                        </label>
+                        <label>
+                          Arquitetura
+                          <select
+                            value={config.opcDaArchitecture}
+                            onChange={(e)=>setConfig({...config,opcDaArchitecture:e.target.value as PlcConfig['opcDaArchitecture']})}
+                          >
+                            <option value="auto">Auto</option>
+                            <option value="x86">x86</option>
+                            <option value="x64">x64</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="drawer-fields two">
+                        <label>
+                          Host OPC DA
+                          <input
+                            value={config.opcDaHost}
+                            onChange={(e)=>setConfig({...config,opcDaHost:e.target.value})}
+                            placeholder="vazio = servidor local"
+                          />
+                        </label>
+                        <label>
+                          Timeout
+                          <input
+                            type="number"
+                            value={config.opcDaTimeout}
+                            onChange={(e)=>setConfig({...config,opcDaTimeout:Number(e.target.value)})}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="drawer-fields three">
+                        <label>
+                          PLC
+                          <input value={config.opcDaPlcName} onChange={(e)=>setConfig({...config,opcDaPlcName:e.target.value})} placeholder="PLC_GW3"/>
+                        </label>
+                        <label>
+                          Application
+                          <input value={config.opcDaApplicationName} onChange={(e)=>setConfig({...config,opcDaApplicationName:e.target.value})} placeholder="Application"/>
+                        </label>
+                        <label>
+                          GVL
+                          <input value={config.opcDaGvlName} onChange={(e)=>setConfig({...config,opcDaGvlName:e.target.value})} placeholder="GVL_SEMAFORO"/>
+                        </label>
+                      </div>
+
+                      <div className="opcda-prefix-preview">
+                        <span>Prefixo gerado</span>
+                        <strong>{[config.opcDaPlcName, config.opcDaApplicationName, config.opcDaGvlName].filter(Boolean).join('.') || '—'}.</strong>
+                      </div>
+
+                      <div className="drawer-section-title compact mapping-title">
+                        <div>
+                          <span>TAGS OPC DA → LÂMPADAS</span>
+                          <small>Você pode informar só o nome curto; o prefixo acima é aplicado automaticamente.</small>
+                        </div>
+                      </div>
+
+                      <div className="drawer-opc-signals">
+                        {trafficLightProject.signals.map((signal) => {
+                          const signalId = signal.id as SignalId
+                          return (
+                            <div className="drawer-opc-card" key={signal.id}>
+                              <div className="drawer-opc-head">
+                                <strong>{signal.label}</strong>
+                                <span>{connected && config.protocol === 'opcda' ? 'AO VIVO' : 'OFFLINE'}</span>
+                              </div>
+                              {signal.tags.map((tag) => {
+                                const lightKey = tag.key as TrafficKey
+                                const testKey = `opcda:${signal.id}:${tag.key}`
+                                const test = opcTagTests[testKey]
+                                const liveValue = signals[signalId][lightKey]
+                                return (
+                                  <div className="drawer-opc-row" key={testKey}>
+                                    <i className={`tag-dot ${tag.key} ${connected && liveValue ? 'on' : ''}`} />
+                                    <span>{tag.label}</span>
+                                    <input
+                                      value={config.opcDaTags[signalId][lightKey]}
+                                      onChange={(e)=>setConfig({
+                                        ...config,
+                                        opcDaTags:{
+                                          ...config.opcDaTags,
+                                          [signalId]:{
+                                            ...config.opcDaTags[signalId],
+                                            [lightKey]:e.target.value,
+                                          },
+                                        },
+                                      })}
+                                      placeholder="OESTE_VERMELHO"
+                                    />
+                                    <button
+                                      disabled={!connected || config.protocol !== 'opcda' || test?.loading}
+                                      onClick={() => testOpcDaTag(signalId, lightKey)}
+                                    >
+                                      {test?.loading ? '...' : 'Testar'}
+                                    </button>
+                                    <b className={connected && liveValue ? 'true' : ''}>
+                                      {connected && config.protocol === 'opcda' ? (liveValue ? 'TRUE' : 'FALSE') : '—'}
+                                    </b>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <div className="opcda-build-hint">
+                        <strong>Primeiro uso neste PC</strong>
+                        <span>Execute <code>npm run build:opcda</code> uma vez para gerar as bridges x86 e x64. Requer .NET SDK 8.</span>
                       </div>
                     </div>
                   ) : (
@@ -698,7 +904,7 @@ function App() {
                     onClick={connected ? disconnect : connect}
                   >
                     {connected ? <Unplug size={17}/> : <PlugZap size={17}/>}
-                    {connected ? 'Desconectar' : `Conectar via ${config.protocol === 'opcua' ? 'OPC UA' : 'Siemens S7'}`}
+                    {connected ? 'Desconectar' : `Conectar via ${config.protocol === 'opcua' ? 'OPC UA' : config.protocol === 'opcda' ? 'OPC DA' : 'Siemens S7'}`}
                   </button>
                 </div>
               ) : (
