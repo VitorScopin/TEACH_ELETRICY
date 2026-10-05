@@ -5,6 +5,12 @@ export {}
 declare global {
   interface Window {
     teachElectrify?: {
+      windowControls: {
+        minimize: () => Promise<{ ok: boolean }>
+        toggleMaximize: () => Promise<{ ok: boolean; maximized: boolean }>
+        close: () => Promise<{ ok: boolean }>
+        isMaximized: () => Promise<{ maximized: boolean }>
+      }
       plc: {
         connect: (config: PlcConfig) => Promise<{ ok: boolean; message?: string }>
         disconnect: () => Promise<{ ok: boolean }>
