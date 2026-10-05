@@ -33,6 +33,14 @@ declare global {
           nodeId?: string
           at?: number
         }>
+        testOpcDaTag: (signalId: string, lightKey: string) => Promise<{
+          ok: boolean
+          message?: string
+          value?: boolean
+          quality?: number
+          tag?: string
+          at?: number
+        }>
         status: () => Promise<{ connected: boolean; config?: PlcConfig | null }>
       }
     }
