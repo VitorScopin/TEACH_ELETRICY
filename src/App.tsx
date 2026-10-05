@@ -52,10 +52,10 @@ const defaultOpcTags: PlcConfig['opcTags'] = {
 }
 
 const defaultOpcDaTags: PlcConfig['opcDaTags'] = {
-  west: { red: 'OESTE_VERMELHO', yellow: 'OESTE_AMARELO', green: 'OESTE_VERDE' },
-  east: { red: 'LESTE_VERMELHO', yellow: 'LESTE_AMARELO', green: 'LESTE_VERDE' },
-  north: { red: 'NORTE_VERMELHO', yellow: 'NORTE_AMARELO', green: 'NORTE_VERDE' },
-  south: { red: 'SUL_VERMELHO', yellow: 'SUL_AMARELO', green: 'SUL_VERDE' },
+  west: { red: '', yellow: '', green: '' },
+  east: { red: '', yellow: '', green: '' },
+  north: { red: '', yellow: '', green: '' },
+  south: { red: '', yellow: '', green: '' },
 }
 
 const defaultConfig: PlcConfig = {
@@ -78,7 +78,7 @@ const defaultConfig: PlcConfig = {
   opcDaArchitecture: 'auto',
   opcDaPlcName: 'PLC_GW3',
   opcDaApplicationName: 'Application',
-  opcDaGvlName: 'GVL_SEMAFORO',
+  opcDaGvlName: 'GVL_NEXTRON_ROBOT',
   opcDaTimeout: 3000,
   opcDaTags: defaultOpcDaTags,
 }
@@ -195,7 +195,22 @@ function App() {
     const poll = async () => {
       const result = await window.teachElectrify?.plc.readTraffic()
       if (result?.ok && result.values) {
-        const nextSignals = result.values
+        const mapped = result.mapped ?? []
+        const nextSignals =
+          config.protocol === 'opcda' && mapped.length > 0
+            ? mapped.reduce<IntersectionTrafficState>((acc, item) => {
+                acc[item.signalId] = {
+                  ...acc[item.signalId],
+                  [item.lightKey]: result.values?.[item.signalId]?.[item.lightKey] ?? false,
+                }
+                return acc
+              }, {
+                west: { ...signalsRef.current.west },
+                east: { ...signalsRef.current.east },
+                north: { ...signalsRef.current.north },
+                south: { ...signalsRef.current.south },
+              })
+            : result.values
 
         if (!sameIntersectionState(signalsRef.current, nextSignals)) {
           signalsRef.current = nextSignals
@@ -210,7 +225,7 @@ function App() {
           config.protocol === 'opcua'
             ? 'Altus OPC UA conectado • 4 semáforos independentes'
             : config.protocol === 'opcda'
-              ? 'Altus OPC DA conectado • 4 semáforos independentes'
+              ? `Altus OPC DA conectado • ${result.mapped?.length ?? 0} tag(s) monitorada(s)`
               : 'Siemens S7 conectado • 4 semáforos independentes'
 
         setConnectionMessage((current) =>
@@ -647,7 +662,7 @@ function App() {
 
                       <div className="opcda-core-note">
                         <strong>Bridge OPC DA Windows</strong>
-                        <span>Usa GodSharp.Opc.Da com o servidor <b>CoDeSys.OPC.DA</b>, igual ao Nextron Core. O TEACH tenta bridge x64/x86 conforme a arquitetura selecionada.</span>
+                        <span>Pré-configurado com o mesmo perfil do Nextron Core: <b>CoDeSys.OPC.DA</b> • PLC_GW3 • Application • GVL_NEXTRON_ROBOT. Preencha apenas as tags que quiser acompanhar; campos vazios são ignorados.</span>
                       </div>
 
                       <div className="drawer-fields two">
@@ -702,7 +717,7 @@ function App() {
                         </label>
                         <label>
                           GVL
-                          <input value={config.opcDaGvlName} onChange={(e)=>setConfig({...config,opcDaGvlName:e.target.value})} placeholder="GVL_SEMAFORO"/>
+                          <input value={config.opcDaGvlName} onChange={(e)=>setConfig({...config,opcDaGvlName:e.target.value})} placeholder="GVL_NEXTRON_ROBOT"/>
                         </label>
                       </div>
 
@@ -714,7 +729,7 @@ function App() {
                       <div className="drawer-section-title compact mapping-title">
                         <div>
                           <span>TAGS OPC DA → LÂMPADAS</span>
-                          <small>Você pode informar só o nome curto; o prefixo acima é aplicado automaticamente.</small>
+                          <small>Mapeamento opcional. Preencha 1, 2 ou quantas tags quiser; as demais não participam da conexão.</small>
                         </div>
                       </div>
 
@@ -732,8 +747,9 @@ function App() {
                                 const testKey = `opcda:${signal.id}:${tag.key}`
                                 const test = opcTagTests[testKey]
                                 const liveValue = signals[signalId][lightKey]
+                                const isMapped = Boolean(config.opcDaTags[signalId][lightKey].trim())
                                 return (
-                                  <div className="drawer-opc-row" key={testKey}>
+                                  <div className={`drawer-opc-row ${isMapped ? 'mapped' : 'unmapped'}`} key={testKey}>
                                     <i className={`tag-dot ${tag.key} ${connected && liveValue ? 'on' : ''}`} />
                                     <span>{tag.label}</span>
                                     <input
@@ -748,16 +764,16 @@ function App() {
                                           },
                                         },
                                       })}
-                                      placeholder="OESTE_VERMELHO"
+                                      placeholder="ex.: xEnable ou OESTE_VERMELHO"
                                     />
                                     <button
-                                      disabled={!connected || config.protocol !== 'opcda' || test?.loading}
+                                      disabled={!connected || config.protocol !== 'opcda' || !isMapped || test?.loading}
                                       onClick={() => testOpcDaTag(signalId, lightKey)}
                                     >
                                       {test?.loading ? '...' : 'Testar'}
                                     </button>
                                     <b className={connected && liveValue ? 'true' : ''}>
-                                      {connected && config.protocol === 'opcda' ? (liveValue ? 'TRUE' : 'FALSE') : '—'}
+                                      {!isMapped ? 'IGNORAR' : connected && config.protocol === 'opcda' ? (liveValue ? 'TRUE' : 'FALSE') : '—'}
                                     </b>
                                   </div>
                                 )
