@@ -893,6 +893,17 @@ function TrafficCars({
   )
 }
 
+function RenderLimiter() {
+  const invalidate = useThree((state) => state.invalidate)
+
+  useEffect(() => {
+    const timer = window.setInterval(() => invalidate(), TARGET_FRAME_MS)
+    return () => window.clearInterval(timer)
+  }, [invalidate])
+
+  return null
+}
+
 function Scene({
   signals,
   running,
@@ -955,8 +966,6 @@ function Scene({
       <OrbitControls
         makeDefault
         target={[0, 0.9, 0]}
-        enableDamping
-        dampingFactor={0.075}
         enablePan
         enableRotate
         enableZoom
@@ -978,17 +987,24 @@ export function TrafficSimulation3D({
   return (
     <div className="traffic-3d-root">
       <Canvas
-        shadows
-        dpr={[1, 1.6]}
+        frameloop="demand"
+        dpr={1}
         camera={{ position: [20, 19, 25], fov: 48 }}
-        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+        gl={{
+          antialias: false,
+          alpha: false,
+          powerPreference: 'high-performance',
+          stencil: false,
+          depth: true,
+        }}
       >
+        <RenderLimiter />
         <Scene signals={signals} running={running} />
       </Canvas>
 
       <div className="traffic-3d-label">
         <span>TRÁFEGO 3D</span>
-        <strong>4 fluxos ativos • filas independentes • semáforos intertravados</strong>
+        <strong>4 fluxos ativos • render otimizado • semáforos intertravados</strong>
       </div>
 
       <div className="traffic-3d-help">
