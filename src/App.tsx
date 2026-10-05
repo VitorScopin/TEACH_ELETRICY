@@ -36,7 +36,31 @@ import type { IntersectionTrafficState, PlcConfig, SignalId, TrafficState } from
 type Mode = 'simulation' | 'plc'
 type TrafficKey = 'red' | 'yellow' | 'green'
 
+const defaultOpcTags: PlcConfig['opcTags'] = {
+  west: {
+    red: 'ns=4;s=|var|Application.GVL_Semaforo.OESTE_VERMELHO',
+    yellow: 'ns=4;s=|var|Application.GVL_Semaforo.OESTE_AMARELO',
+    green: 'ns=4;s=|var|Application.GVL_Semaforo.OESTE_VERDE',
+  },
+  east: {
+    red: 'ns=4;s=|var|Application.GVL_Semaforo.LESTE_VERMELHO',
+    yellow: 'ns=4;s=|var|Application.GVL_Semaforo.LESTE_AMARELO',
+    green: 'ns=4;s=|var|Application.GVL_Semaforo.LESTE_VERDE',
+  },
+  north: {
+    red: 'ns=4;s=|var|Application.GVL_Semaforo.NORTE_VERMELHO',
+    yellow: 'ns=4;s=|var|Application.GVL_Semaforo.NORTE_AMARELO',
+    green: 'ns=4;s=|var|Application.GVL_Semaforo.NORTE_VERDE',
+  },
+  south: {
+    red: 'ns=4;s=|var|Application.GVL_Semaforo.SUL_VERMELHO',
+    yellow: 'ns=4;s=|var|Application.GVL_Semaforo.SUL_AMARELO',
+    green: 'ns=4;s=|var|Application.GVL_Semaforo.SUL_VERDE',
+  },
+}
+
 const defaultConfig: PlcConfig = {
+  protocol: 's7',
   ...trafficLightProject.defaultConnection,
   tags: Object.fromEntries(
     trafficLightProject.signals.map((signal) => [
@@ -44,6 +68,12 @@ const defaultConfig: PlcConfig = {
       Object.fromEntries(signal.tags.map((tag) => [tag.key, tag.address])),
     ]),
   ) as PlcConfig['tags'],
+  opcEndpoint: 'opc.tcp://192.168.15.1:4840',
+  opcSecurityMode: 'None',
+  opcSecurityPolicy: 'None',
+  opcUsername: '',
+  opcPassword: '',
+  opcTags: defaultOpcTags,
 }
 
 const lightToState = (key: TrafficKey): TrafficState => ({
@@ -112,7 +142,11 @@ function App() {
       if (result?.ok && result.values) {
         setSignals(result.values)
         setTraffic(result.values.west)
-        setConnectionMessage('PLC Siemens conectado • 4 semáforos independentes')
+        setConnectionMessage(
+          config.protocol === 'opcua'
+            ? 'Altus OPC UA conectado • 4 semáforos independentes'
+            : 'Siemens S7 conectado • 4 semáforos independentes',
+        )
       } else if (result) {
         setConnectionMessage(result.message || 'Falha na leitura do PLC')
       }
@@ -120,7 +154,7 @@ function App() {
     poll()
     const timer = window.setInterval(poll, trafficLightProject.scanMs)
     return () => window.clearInterval(timer)
-  }, [mode, connected])
+  }, [mode, connected, config.protocol])
 
   const activeLights = useMemo(() => getActiveLights(traffic), [traffic])
   const activeLight = activeLights.length === 1 ? activeLights[0] : activeLights.length > 1 ? 'fault' : 'off'
@@ -174,11 +208,17 @@ function App() {
     setConnectionMessage('Conectando ao PLC...')
     const result = await window.teachElectrify?.plc.connect(config)
     if (!result) {
-      setConnectionMessage('Abra pelo Electron para acessar o driver S7')
+      setConnectionMessage('Abra pelo Electron para acessar os drivers industriais')
       return
     }
     setConnected(result.ok)
-    setConnectionMessage(result.ok ? 'PLC Siemens conectado' : result.message || 'Falha ao conectar')
+    setConnectionMessage(
+      result.ok
+        ? config.protocol === 'opcua'
+          ? 'Altus OPC UA conectado'
+          : 'Siemens S7 conectado'
+        : result.message || 'Falha ao conectar',
+    )
   }
 
   const disconnect = async () => {
@@ -305,7 +345,16 @@ function App() {
 
                 <div className="telemetry-overlay">
                   <div><span>Estado Atual</span><strong><i className={`state-led ${activeLight}`} />{stateLabel[activeLight]}</strong></div>
-                  <div><span>Fonte</span><strong>{mode === 'plc' ? 'TIA Portal / PLC S7' : 'Simulador interno'}</strong></div>
+                  <div>
+                    <span>Fonte</span>
+                    <strong>
+                      {mode === 'plc'
+                        ? config.protocol === 'opcua'
+                          ? 'MasterTool / Altus OPC UA'
+                          : 'TIA Portal / Siemens S7'
+                        : 'Simulador interno'}
+                    </strong>
+                  </div>
                   <div><span>Tempo fase</span><strong>{phaseElapsed.toFixed(1)} s / {(steps[phase]?.durationMs ?? 0) / 1000} s</strong></div>
                   <div><span>Scan do PLC</span><strong>{mode === 'plc' ? '250 ms' : 'LOCAL'}</strong></div>
                 </div>
@@ -388,15 +437,77 @@ function App() {
                   <div className="panel-kicker"><Cpu size={16} /><span>CONEXÃO INDUSTRIAL</span></div>
                   <div className={connected ? 'plc-status online' : 'plc-status'}><i />{connected ? 'PLC ONLINE' : 'OFFLINE'}</div>
                 </div>
-                <h2>Siemens S7</h2>
+                <h2>{config.protocol === 'opcua' ? 'Altus OPC UA' : 'Siemens S7'}</h2>
 
-                <div className="connection-fields">
-                  <label className="ip-field">Endereço IP<input value={config.host} onChange={(e) => setConfig({...config,host:e.target.value})}/></label>
-                  <label>Rack<input type="number" value={config.rack} onChange={(e)=>setConfig({...config,rack:Number(e.target.value)})}/></label>
-                  <label>Slot<input type="number" value={config.slot} onChange={(e)=>setConfig({...config,slot:Number(e.target.value)})}/></label>
+                <div className="protocol-selector">
+                  <button
+                    className={config.protocol === 's7' ? 'active' : ''}
+                    disabled={connected}
+                    onClick={() => setConfig({...config, protocol:'s7'})}
+                  >
+                    Siemens S7
+                  </button>
+                  <button
+                    className={config.protocol === 'opcua' ? 'active' : ''}
+                    disabled={connected}
+                    onClick={() => setConfig({...config, protocol:'opcua'})}
+                  >
+                    Altus OPC UA
+                  </button>
                 </div>
 
-                <div className="tag-heading">Memórias dos semáforos</div>
+                {config.protocol === 's7' ? (
+                  <div className="connection-fields">
+                    <label className="ip-field">Endereço IP<input value={config.host} onChange={(e) => setConfig({...config,host:e.target.value})}/></label>
+                    <label>Rack<input type="number" value={config.rack} onChange={(e)=>setConfig({...config,rack:Number(e.target.value)})}/></label>
+                    <label>Slot<input type="number" value={config.slot} onChange={(e)=>setConfig({...config,slot:Number(e.target.value)})}/></label>
+                  </div>
+                ) : (
+                  <div className="opc-config">
+                    <label>
+                      Endpoint OPC UA
+                      <input
+                        value={config.opcEndpoint}
+                        onChange={(e)=>setConfig({...config,opcEndpoint:e.target.value})}
+                        placeholder="opc.tcp://192.168.15.1:4840"
+                      />
+                    </label>
+                    <div className="opc-security-row">
+                      <label>
+                        Security Mode
+                        <select
+                          value={config.opcSecurityMode}
+                          onChange={(e)=>setConfig({...config,opcSecurityMode:e.target.value as PlcConfig['opcSecurityMode']})}
+                        >
+                          <option value="None">None</option>
+                          <option value="Sign">Sign</option>
+                          <option value="SignAndEncrypt">SignAndEncrypt</option>
+                        </select>
+                      </label>
+                      <label>
+                        Security Policy
+                        <select
+                          value={config.opcSecurityPolicy}
+                          onChange={(e)=>setConfig({...config,opcSecurityPolicy:e.target.value as PlcConfig['opcSecurityPolicy']})}
+                        >
+                          <option value="None">None</option>
+                          <option value="Basic256Sha256">Basic256Sha256</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div className="opc-security-row">
+                      <label>Usuário (opcional)<input value={config.opcUsername} onChange={(e)=>setConfig({...config,opcUsername:e.target.value})}/></label>
+                      <label>Senha (opcional)<input type="password" value={config.opcPassword} onChange={(e)=>setConfig({...config,opcPassword:e.target.value})}/></label>
+                    </div>
+                    <small className="opc-hint">
+                      Para teste rápido no XP340 use porta 4840 e segurança None. Os NodeIds abaixo podem variar conforme o projeto; confirme-os no UaExpert/cliente OPC.
+                    </small>
+                  </div>
+                )}
+
+                <div className="tag-heading">
+                  {config.protocol === 'opcua' ? 'NodeIds OPC UA dos semáforos' : 'Memórias dos semáforos'}
+                </div>
                 <div className="signal-memory-grid">
                   {trafficLightProject.signals.map((signal) => (
                     <div className="signal-memory-group" key={signal.id}>
@@ -407,14 +518,19 @@ function App() {
                             <i className={`tag-dot ${tag.key}`}/>
                             <span>{tag.label}</span>
                             <input
-                              value={config.tags[signal.id as SignalId][tag.key]}
-                              onChange={(e) =>
+                              value={
+                                config.protocol === 'opcua'
+                                  ? config.opcTags[signal.id as SignalId][tag.key]
+                                  : config.tags[signal.id as SignalId][tag.key]
+                              }
+                              onChange={(e) => {
+                                const target = config.protocol === 'opcua' ? 'opcTags' : 'tags'
                                 setConfig({
                                   ...config,
-                                  tags: {
-                                    ...config.tags,
+                                  [target]: {
+                                    ...config[target],
                                     [signal.id]: {
-                                      ...config.tags[signal.id as SignalId],
+                                      ...config[target][signal.id as SignalId],
                                       [tag.key]: e.target.value,
                                     },
                                   },
