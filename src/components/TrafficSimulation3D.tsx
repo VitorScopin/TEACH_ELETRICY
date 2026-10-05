@@ -1,11 +1,10 @@
 import { OrbitControls, useGLTF } from '@react-three/drei'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { Suspense, useMemo, useRef, useState } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import {
   TRAFFIC_GEOMETRY,
   TRAFFIC_WORLD,
-  VEHICLE_DIMENSIONS,
   type VehicleKind,
 } from '../simulation/trafficWorld'
 import type { IntersectionTrafficState, SignalId, TrafficState } from '../types'
@@ -34,6 +33,8 @@ type TrafficSimulation3DProps = {
 
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
 const KINDS: VehicleKind[] = ['sedan']
+const MAX_CARS_PER_FLOW = 3
+const TARGET_FRAME_MS = 34
 
 const VEHICLE_MODELS: Record<
   VehicleVariant,
@@ -78,11 +79,9 @@ function isWheelRoot(object: THREE.Object3D) {
 function RealisticCarModel({
   variant,
   color,
-  braking,
 }: {
   variant: VehicleVariant
   color: string
-  braking: boolean
 }) {
   const definition = VEHICLE_MODELS[variant]
   const { scene } = useGLTF(definition.url)
@@ -91,12 +90,18 @@ function RealisticCarModel({
     const model = scene.clone(true)
 
     model.traverse((child) => {
-      if (isWheelRoot(child)) child.userData.wheelRoot = true
+      const wheelRoot = isWheelRoot(child)
+      if (wheelRoot) child.userData.wheelRoot = true
+
+      if (child !== model && !wheelRoot) {
+        child.updateMatrix()
+        child.matrixAutoUpdate = false
+      }
 
       if (!(child instanceof THREE.Mesh)) return
 
-      child.castShadow = true
-      child.receiveShadow = true
+      child.castShadow = false
+      child.receiveShadow = false
 
       const originalMaterials = Array.isArray(child.material) ? child.material : [child.material]
       const clonedMaterials = originalMaterials.map((material) => {
@@ -113,22 +118,17 @@ function RealisticCarModel({
 
           if (isPaint) {
             clone.color = new THREE.Color(color)
-            clone.metalness = Math.max(clone.metalness, 0.42)
-            clone.roughness = Math.min(clone.roughness, 0.28)
+            clone.metalness = Math.max(clone.metalness, 0.4)
+            clone.roughness = Math.max(0.24, Math.min(clone.roughness, 0.34))
 
             if (clone instanceof THREE.MeshPhysicalMaterial) {
-              clone.clearcoat = Math.max(clone.clearcoat, 0.8)
-              clone.clearcoatRoughness = Math.min(clone.clearcoatRoughness, 0.18)
+              clone.clearcoat = Math.min(0.68, Math.max(clone.clearcoat, 0.55))
+              clone.clearcoatRoughness = Math.max(0.2, clone.clearcoatRoughness)
             }
           }
 
-          if (/brake.?light|taillight/i.test(materialName) || /brake.?light|taillight/i.test(meshName)) {
-            clone.emissive = new THREE.Color('#ff2020')
-            clone.emissiveIntensity = braking ? 6.2 : 1.4
-          }
-
           if (/headlight/i.test(materialName) || /headlight/i.test(meshName)) {
-            clone.emissiveIntensity = Math.max(clone.emissiveIntensity, 2.0)
+            clone.emissiveIntensity = Math.min(1.2, Math.max(clone.emissiveIntensity, 0.7))
           }
         }
 
@@ -154,13 +154,27 @@ function RealisticCarModel({
       rotationY,
       offset: new THREE.Vector3(-center.x, -bounds.min.y, -center.z),
     }
-  }, [scene, definition, color, braking])
+  }, [scene, definition, color])
 
   return (
     <group>
+      <mesh position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={-1}>
+        <planeGeometry args={[definition.length * 0.9, 1.72]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.2} depthWrite={false} />
+      </mesh>
+
       <group rotation={[0, normalized.rotationY, 0]} scale={normalized.scale}>
         <primitive object={normalized.model} position={normalized.offset} />
       </group>
+
+      <mesh userData={{ brakeLamp: true }} position={[-definition.length / 2 + 0.12, 0.55, 0.54]}>
+        <boxGeometry args={[0.05, 0.08, 0.22]} />
+        <meshBasicMaterial color="#5a1114" toneMapped={false} />
+      </mesh>
+      <mesh userData={{ brakeLamp: true }} position={[-definition.length / 2 + 0.12, 0.55, -0.54]}>
+        <boxGeometry args={[0.05, 0.08, 0.22]} />
+        <meshBasicMaterial color="#5a1114" toneMapped={false} />
+      </mesh>
     </group>
   )
 }
@@ -191,7 +205,7 @@ function SignalHead({ traffic }: { traffic: TrafficState }) {
 
       {lamps.map((lamp) => (
         <mesh key={lamp.key} position={[0, lamp.y, -TRAFFIC_WORLD.signalHeadDepth * 0.52]}>
-          <sphereGeometry args={[0.09, 18, 18]} />
+          <sphereGeometry args={[0.09, 10, 8]} />
           <meshStandardMaterial
             color={lamp.active ? lamp.color : '#12181c'}
             emissive={lamp.active ? lamp.color : '#000000'}
@@ -216,7 +230,7 @@ function TrafficLight3D({
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
       <mesh castShadow position={[0, TRAFFIC_WORLD.signalPoleHeight / 2, 0]}>
-        <cylinderGeometry args={[0.055, 0.072, TRAFFIC_WORLD.signalPoleHeight, 14]} />
+        <cylinderGeometry args={[0.055, 0.072, TRAFFIC_WORLD.signalPoleHeight, 8]} />
         <meshStandardMaterial color="#59666d" metalness={0.7} roughness={0.34} />
       </mesh>
 
@@ -225,7 +239,7 @@ function TrafficLight3D({
       </group>
 
       <mesh castShadow position={[0, 0.07, 0]}>
-        <cylinderGeometry args={[0.13, 0.17, 0.14, 14]} />
+        <cylinderGeometry args={[0.13, 0.17, 0.14, 8]} />
         <meshStandardMaterial color="#323d43" metalness={0.42} roughness={0.52} />
       </mesh>
     </group>
