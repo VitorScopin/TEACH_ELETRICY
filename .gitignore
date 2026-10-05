@@ -3,3 +3,8 @@ dist
 .DS_Store
 *.log
 .vscode
+
+electron/opc-da-bridge/publish/
+electron/opc-da-bridge/*.exe
+electron/opc-da-bridge/**/bin/
+electron/opc-da-bridge/**/obj/
