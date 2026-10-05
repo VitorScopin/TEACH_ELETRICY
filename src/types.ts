@@ -5,6 +5,9 @@ export type TrafficState = {
 }
 
 export type SignalId = 'west' | 'east' | 'north' | 'south'
+export type PlcProtocol = 's7' | 'opcua'
+export type OpcSecurityMode = 'None' | 'Sign' | 'SignAndEncrypt'
+export type OpcSecurityPolicy = 'None' | 'Basic256Sha256'
 
 export type IntersectionTrafficState = Record<SignalId, TrafficState>
 
@@ -15,8 +18,15 @@ export type SignalTags = {
 }
 
 export type PlcConfig = {
+  protocol: PlcProtocol
   host: string
   rack: number
   slot: number
   tags: Record<SignalId, SignalTags>
+  opcEndpoint: string
+  opcSecurityMode: OpcSecurityMode
+  opcSecurityPolicy: OpcSecurityPolicy
+  opcUsername: string
+  opcPassword: string
+  opcTags: Record<SignalId, SignalTags>
 }
