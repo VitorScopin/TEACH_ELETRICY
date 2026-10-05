@@ -37,7 +37,7 @@ const KINDS: VehicleKind[] = ['sedan']
 
 const VEHICLE_MODELS: Record<
   VehicleVariant,
-  { url: string; length: number; paintable: boolean }
+  { url: string; length: number; paintable: boolean; forwardYaw?: number }
 > = {
   concept: {
     url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/CarConcept/glTF-Binary/CarConcept.glb',
@@ -48,16 +48,19 @@ const VEHICLE_MODELS: Record<
     url: 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/ferrari.glb',
     length: 4.53,
     paintable: true,
+    forwardYaw: -Math.PI / 2,
   },
   lc80: {
     url: './models/vehicles/lc80.glb',
     length: 4.82,
     paintable: false,
+    forwardYaw: -Math.PI / 2,
   },
   sport: {
     url: './models/vehicles/red-car.glb',
     length: 4.38,
     paintable: false,
+    forwardYaw: -Math.PI / 2,
   },
 }
 
@@ -66,6 +69,7 @@ const VEHICLE_VARIANTS: VehicleVariant[] = ['concept', 'ferrari', 'lc80', 'sport
 function isWheelRoot(object: THREE.Object3D) {
   if (/^Wheel(?:Front|Rear)[LR]$/i.test(object.name)) return true
   if (/^wheel_(?:fl|fr|rl|rr)$/i.test(object.name)) return true
+  if (/^(?:L|R)[FB]_WHEEL$/i.test(object.name)) return true
 
   const wheelName = /wheel|tire|tyre/i
   return !(object instanceof THREE.Mesh) && wheelName.test(object.name) && !wheelName.test(object.parent?.name ?? '')
@@ -141,7 +145,8 @@ function RealisticCarModel({
     const center = bounds.getCenter(new THREE.Vector3())
     const rawLength = Math.max(size.x, size.z, 0.001)
     const scale = definition.length / rawLength
-    const rotationY = size.z > size.x ? Math.PI / 2 : 0
+    const rotationY =
+      definition.forwardYaw ?? (size.z > size.x ? Math.PI / 2 : 0)
 
     return {
       model,
