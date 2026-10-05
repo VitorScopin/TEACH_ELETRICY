@@ -35,6 +35,12 @@ import type { IntersectionTrafficState, PlcConfig, SignalId, TrafficState } from
 
 type Mode = 'simulation' | 'plc'
 type TrafficKey = 'red' | 'yellow' | 'green'
+type OpcTagTestState = {
+  loading: boolean
+  ok?: boolean
+  value?: boolean
+  message?: string
+}
 
 const defaultOpcTags: PlcConfig['opcTags'] = {
   west: {
@@ -112,6 +118,7 @@ function App() {
   const [running, setRunning] = useState(true)
   const [connected, setConnected] = useState(false)
   const [config, setConfig] = useState<PlcConfig>(defaultConfig)
+  const [opcTagTests, setOpcTagTests] = useState<Record<string, OpcTagTestState>>({})
   const [connectionMessage, setConnectionMessage] = useState('Ambiente virtual pronto')
   const [seenStates, setSeenStates] = useState(() => new Set<string>())
   const [phaseStartedAt, setPhaseStartedAt] = useState(Date.now())
@@ -226,6 +233,76 @@ function App() {
     setConnected(false)
     setMode('simulation')
     setConnectionMessage('Ambiente virtual pronto')
+  }
+
+  const syncOpcTags = async () => {
+    if (config.protocol !== 'opcua') return
+
+    if (!connected) {
+      setConnectionMessage('As tags OPC serão aplicadas ao conectar')
+      return
+    }
+
+    setConnectionMessage('Sincronizando tags OPC com as lâmpadas...')
+    const result = await window.teachElectrify?.plc.updateOpcTags(config.opcTags)
+
+    if (!result) {
+      setConnectionMessage('Abra pelo Electron para sincronizar as tags OPC')
+      return
+    }
+
+    setConnectionMessage(
+      result.ok
+        ? 'Mapeamento OPC sincronizado • 12 lâmpadas vinculadas'
+        : result.message || 'Falha ao sincronizar tags OPC',
+    )
+  }
+
+  const testOpcTag = async (signalId: SignalId, lightKey: TrafficKey) => {
+    const key = `${signalId}:${lightKey}`
+    const nodeId = config.opcTags[signalId][lightKey]
+
+    setOpcTagTests((current) => ({
+      ...current,
+      [key]: { loading: true },
+    }))
+
+    const result = await window.teachElectrify?.plc.testOpcNode(nodeId)
+
+    if (!result) {
+      setOpcTagTests((current) => ({
+        ...current,
+        [key]: { loading: false, ok: false, message: 'Use o app pelo Electron' },
+      }))
+      return
+    }
+
+    setOpcTagTests((current) => ({
+      ...current,
+      [key]: {
+        loading: false,
+        ok: result.ok,
+        value: result.value,
+        message: result.message,
+      },
+    }))
+
+    if (result.ok && typeof result.value === 'boolean') {
+      const nextSignals: IntersectionTrafficState = {
+        ...signals,
+        [signalId]: {
+          ...signals[signalId],
+          [lightKey]: result.value,
+        },
+      }
+      setSignals(nextSignals)
+      if (signalId === 'west') setTraffic(nextSignals.west)
+      setConnectionMessage(
+        `Teste OPC: ${signalId.toUpperCase()} / ${lightKey.toUpperCase()} = ${result.value ? 'TRUE' : 'FALSE'}`,
+      )
+    } else {
+      setConnectionMessage(result.message || 'Falha ao testar NodeId OPC')
+    }
   }
 
   const resetLab = () => {
@@ -505,44 +582,152 @@ function App() {
                   </div>
                 )}
 
-                <div className="tag-heading">
-                  {config.protocol === 'opcua' ? 'NodeIds OPC UA dos semáforos' : 'Memórias dos semáforos'}
-                </div>
-                <div className="signal-memory-grid">
-                  {trafficLightProject.signals.map((signal) => (
-                    <div className="signal-memory-group" key={signal.id}>
-                      <strong>{signal.label}</strong>
-                      <div className="tag-list">
-                        {signal.tags.map((tag) => (
-                          <label key={`${signal.id}-${tag.key}`}>
-                            <i className={`tag-dot ${tag.key}`}/>
-                            <span>{tag.label}</span>
-                            <input
-                              value={
-                                config.protocol === 'opcua'
-                                  ? config.opcTags[signal.id as SignalId][tag.key]
-                                  : config.tags[signal.id as SignalId][tag.key]
-                              }
-                              onChange={(e) => {
-                                const target = config.protocol === 'opcua' ? 'opcTags' : 'tags'
-                                setConfig({
-                                  ...config,
-                                  [target]: {
-                                    ...config[target],
-                                    [signal.id]: {
-                                      ...config[target][signal.id as SignalId],
-                                      [tag.key]: e.target.value,
-                                    },
-                                  },
-                                })
-                              }}
-                            />
-                          </label>
-                        ))}
+                {config.protocol === 'opcua' ? (
+                  <>
+                    <div className="opc-mapping-head">
+                      <div>
+                        <span>MAPEAMENTO OPC → LÂMPADAS</span>
+                        <small>Cada NodeId abaixo controla diretamente uma lâmpada da cena 3D.</small>
                       </div>
+                      <button
+                        className="opc-sync-button"
+                        onClick={syncOpcTags}
+                        title="Aplicar o mapeamento atual sem reconectar"
+                      >
+                        <Radio size={13} />
+                        Sincronizar tags
+                      </button>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="opc-mapping-grid">
+                      {trafficLightProject.signals.map((signal) => {
+                        const signalId = signal.id as SignalId
+                        return (
+                          <div className="opc-signal-card" key={signal.id}>
+                            <div className="opc-signal-title">
+                              <strong>Semáforo {signal.label}</strong>
+                              <span>{connected ? 'SINCRONIZAÇÃO AO VIVO' : 'AGUARDANDO CONEXÃO'}</span>
+                            </div>
+
+                            {signal.tags.map((tag) => {
+                              const lightKey = tag.key as TrafficKey
+                              const testKey = `${signal.id}:${tag.key}`
+                              const test = opcTagTests[testKey]
+                              const liveValue = signals[signalId][lightKey]
+
+                              return (
+                                <div
+                                  className={`opc-tag-map ${connected && liveValue ? 'live-on' : ''}`}
+                                  key={testKey}
+                                >
+                                  <div className="opc-lamp-binding">
+                                    <i className={`tag-dot ${tag.key} ${connected && liveValue ? 'on' : ''}`} />
+                                    <div>
+                                      <strong>{tag.label}</strong>
+                                      <small>{signal.label} → {tag.label}</small>
+                                    </div>
+                                  </div>
+
+                                  <input
+                                    className="opc-node-input"
+                                    value={config.opcTags[signalId][lightKey]}
+                                    onChange={(e) => {
+                                      setConfig({
+                                        ...config,
+                                        opcTags: {
+                                          ...config.opcTags,
+                                          [signalId]: {
+                                            ...config.opcTags[signalId],
+                                            [lightKey]: e.target.value,
+                                          },
+                                        },
+                                      })
+                                      setOpcTagTests((current) => ({
+                                        ...current,
+                                        [testKey]: { loading: false },
+                                      }))
+                                    }}
+                                    placeholder="ns=4;s=|var|Application.GVL..."
+                                    title="NodeId OPC UA"
+                                  />
+
+                                  <button
+                                    className="opc-test-button"
+                                    disabled={!connected || test?.loading}
+                                    onClick={() => testOpcTag(signalId, lightKey)}
+                                  >
+                                    {test?.loading ? '...' : 'Testar'}
+                                  </button>
+
+                                  <span
+                                    className={`opc-live-value ${
+                                      test?.ok
+                                        ? test.value
+                                          ? 'true'
+                                          : 'false'
+                                        : connected
+                                          ? liveValue
+                                            ? 'true'
+                                            : 'false'
+                                          : ''
+                                    }`}
+                                    title={test?.message || 'Valor BOOL atual'}
+                                  >
+                                    {test?.loading
+                                      ? 'LENDO'
+                                      : test?.ok
+                                        ? test.value
+                                          ? 'TRUE'
+                                          : 'FALSE'
+                                        : connected
+                                          ? liveValue
+                                            ? 'TRUE'
+                                            : 'FALSE'
+                                          : '—'}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="tag-heading">Memórias dos semáforos</div>
+                    <div className="signal-memory-grid">
+                      {trafficLightProject.signals.map((signal) => (
+                        <div className="signal-memory-group" key={signal.id}>
+                          <strong>{signal.label}</strong>
+                          <div className="tag-list">
+                            {signal.tags.map((tag) => (
+                              <label key={`${signal.id}-${tag.key}`}>
+                                <i className={`tag-dot ${tag.key}`}/>
+                                <span>{tag.label}</span>
+                                <input
+                                  value={config.tags[signal.id as SignalId][tag.key]}
+                                  onChange={(e) =>
+                                    setConfig({
+                                      ...config,
+                                      tags: {
+                                        ...config.tags,
+                                        [signal.id]: {
+                                          ...config.tags[signal.id as SignalId],
+                                          [tag.key]: e.target.value,
+                                        },
+                                      },
+                                    })
+                                  }
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
 
                 <div className={connected ? 'connection-health online' : 'connection-health'}>
                   <ShieldCheck size={16}/><span>{connectionMessage}</span>
