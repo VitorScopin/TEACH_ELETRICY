@@ -18,6 +18,7 @@ declare global {
           ok: boolean
           message?: string
           values?: IntersectionTrafficState
+          mapped?: Array<{ signalId: 'west' | 'east' | 'north' | 'south'; lightKey: 'red' | 'yellow' | 'green' }>
           at?: number
         }>
         updateOpcTags: (opcTags: PlcConfig['opcTags']) => Promise<{
