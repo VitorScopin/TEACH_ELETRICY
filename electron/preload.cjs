@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('teachElectrify', {
     readTraffic: () => ipcRenderer.invoke('plc:read-traffic'),
     updateOpcTags: (opcTags) => ipcRenderer.invoke('plc:update-opc-tags', opcTags),
     testOpcNode: (nodeId) => ipcRenderer.invoke('plc:test-opc-node', nodeId),
+    testOpcDaTag: (signalId, lightKey) => ipcRenderer.invoke('plc:test-opc-da-tag', signalId, lightKey),
     status: () => ipcRenderer.invoke('plc:status'),
   },
 })
