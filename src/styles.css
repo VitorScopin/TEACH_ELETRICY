@@ -2165,3 +2165,69 @@ main {
 .drawer-opc-row.mapped {
   background:linear-gradient(90deg,rgba(33,176,148,.045),transparent 60%);
 }
+
+
+/* --- Official Altus MasterTool OPC DA simulation preset --- */
+.mastertool-sim-preset {
+  display:grid;
+  gap:9px;
+  padding:11px;
+  border:1px solid rgba(76,185,214,.26);
+  border-radius:9px;
+  background:linear-gradient(145deg,rgba(9,53,68,.35),rgba(5,24,32,.78));
+}
+.mastertool-sim-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.mastertool-sim-head span {
+  display:block;
+  color:#45dce0;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.11em;
+}
+.mastertool-sim-head strong {
+  display:block;
+  margin-top:3px;
+  color:#edf8fa;
+  font-size:11px;
+}
+.mastertool-sim-head b {
+  padding:5px 7px;
+  border:1px solid rgba(68,223,210,.26);
+  border-radius:6px;
+  background:rgba(17,94,96,.2);
+  color:#6bf0df;
+  font-size:7px;
+}
+.mastertool-sim-grid {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+}
+.mastertool-sim-grid > div {
+  padding:8px;
+  border:1px solid rgba(79,143,163,.18);
+  border-radius:7px;
+  background:#061923;
+}
+.mastertool-sim-grid span {
+  display:block;
+  color:#7895a0;
+  font-size:7px;
+}
+.mastertool-sim-grid strong {
+  display:block;
+  margin-top:3px;
+  color:#dff4f7;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:9px;
+}
+.mastertool-sim-preset small {
+  color:#91a9b2;
+  font-size:7.5px;
+  line-height:1.5;
+}
