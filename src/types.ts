@@ -5,7 +5,8 @@ export type TrafficState = {
 }
 
 export type SignalId = 'west' | 'east' | 'north' | 'south'
-export type PlcProtocol = 's7' | 'opcua'
+export type PlcProtocol = 's7' | 'opcua' | 'opcda'
+export type OpcDaArchitecture = 'auto' | 'x86' | 'x64'
 export type OpcSecurityMode = 'None' | 'Sign' | 'SignAndEncrypt'
 export type OpcSecurityPolicy = 'None' | 'Basic256Sha256'
 
@@ -29,4 +30,12 @@ export type PlcConfig = {
   opcUsername: string
   opcPassword: string
   opcTags: Record<SignalId, SignalTags>
+  opcDaProgId: string
+  opcDaHost: string
+  opcDaArchitecture: OpcDaArchitecture
+  opcDaPlcName: string
+  opcDaApplicationName: string
+  opcDaGvlName: string
+  opcDaTimeout: number
+  opcDaTags: Record<SignalId, SignalTags>
 }
