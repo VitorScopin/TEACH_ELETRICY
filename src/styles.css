@@ -579,3 +579,49 @@ main { min-width:0; padding:22px 20px 20px; }
 .traffic-3d-root canvas:active {
   cursor:grabbing;
 }
+
+
+.signal-memory-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:6px;
+}
+.signal-memory-group {
+  min-width:0;
+  padding:8px;
+  border:1px solid rgba(76,151,180,.16);
+  border-radius:8px;
+  background:rgba(5,18,27,.46);
+}
+.signal-memory-group > strong {
+  display:block;
+  margin-bottom:6px;
+  color:#a9c4cf;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.signal-memory-group .tag-list {
+  gap:4px;
+}
+.signal-memory-group .tag-list label {
+  grid-template-columns:9px minmax(38px,1fr) 58px;
+  gap:5px;
+  padding:4px 5px;
+}
+.signal-memory-group .tag-list label span {
+  font-size:7px;
+}
+.signal-memory-group .tag-list input {
+  min-width:0;
+  width:100%;
+  padding:4px 5px;
+  font-size:8px;
+}
+@media (max-width:1250px) {
+  .signal-memory-grid {
+    grid-template-columns:1fr;
+  }
+}
