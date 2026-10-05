@@ -209,6 +209,68 @@ ipcMain.handle('plc:status', () => ({
   config: activeConfig,
 }))
 
+ipcMain.handle('plc:update-opc-tags', async (_event, opcTags) => {
+  if (!plcConnected || activeConfig?.protocol !== 'opcua' || !opcSession) {
+    return { ok: false, message: 'Conecte ao servidor OPC UA antes de sincronizar as tags' }
+  }
+
+  activeConfig = {
+    ...activeConfig,
+    opcTags: normalizeTags(opcTags, {}),
+  }
+
+  return {
+    ok: true,
+    message: 'Mapeamento OPC UA sincronizado com as 12 lâmpadas',
+    opcTags: activeConfig.opcTags,
+  }
+})
+
+ipcMain.handle('plc:test-opc-node', async (_event, nodeId) => {
+  if (!plcConnected || activeConfig?.protocol !== 'opcua' || !opcSession) {
+    return { ok: false, message: 'Conecte ao servidor OPC UA para testar a tag' }
+  }
+
+  if (!nodeId || typeof nodeId !== 'string') {
+    return { ok: false, message: 'Informe um NodeId OPC UA válido' }
+  }
+
+  try {
+    const dataValue = await opcSession.read({
+      nodeId: nodeId.trim(),
+      attributeId: AttributeIds.Value,
+    })
+
+    if (!dataValue?.statusCode?.isGood()) {
+      return {
+        ok: false,
+        message: `Qualidade OPC inválida: ${dataValue?.statusCode?.toString()}`,
+      }
+    }
+
+    const rawValue = dataValue.value?.value
+    if (typeof rawValue !== 'boolean') {
+      return {
+        ok: false,
+        message: `A tag precisa ser BOOL. Tipo recebido: ${typeof rawValue}`,
+      }
+    }
+
+    return {
+      ok: true,
+      value: rawValue,
+      statusCode: dataValue.statusCode.toString(),
+      nodeId: nodeId.trim(),
+      at: Date.now(),
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+})
+
 async function readOpcTraffic() {
   const tags = activeConfig?.opcTags
   if (!opcSession || !tags) {
