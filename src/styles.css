@@ -2078,3 +2078,74 @@ main {
     width:40px;
   }
 }
+
+
+/* --- Altus OPC DA port from Nextron Core --- */
+.connection-choice {
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.connection-choice button {
+  min-width:0;
+}
+.opcda-core-note,
+.opcda-build-hint {
+  display:grid;
+  gap:5px;
+  padding:10px 11px;
+  border:1px solid rgba(52,210,199,.24);
+  border-radius:8px;
+  background:linear-gradient(145deg,rgba(10,69,76,.24),rgba(5,25,34,.72));
+}
+.opcda-core-note strong,
+.opcda-build-hint strong {
+  color:#70efe3;
+  font-size:9px;
+}
+.opcda-core-note span,
+.opcda-build-hint span {
+  color:#b2c8cf;
+  font-size:8px;
+  line-height:1.5;
+}
+.opcda-core-note b {
+  color:#ecf8fa;
+}
+.opcda-build-hint {
+  margin-top:2px;
+  border-color:rgba(81,143,166,.22);
+  background:rgba(7,27,37,.74);
+}
+.opcda-build-hint code {
+  padding:2px 4px;
+  border-radius:4px;
+  background:#04151e;
+  color:#9df3e8;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:7.5px;
+}
+.opcda-prefix-preview {
+  display:grid;
+  gap:4px;
+  padding:8px 10px;
+  border:1px solid rgba(69,143,168,.2);
+  border-radius:7px;
+  background:#061923;
+}
+.opcda-prefix-preview span {
+  color:#7895a0;
+  font-size:7px;
+  font-weight:800;
+}
+.opcda-prefix-preview strong {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#d9edf2;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:8px;
+}
+@media (max-width:820px) {
+  .connection-choice {
+    grid-template-columns:1fr;
+  }
+}
