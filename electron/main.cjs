@@ -26,7 +26,8 @@ function createWindow() {
     minWidth: 1120,
     minHeight: 720,
     backgroundColor: '#071018',
-    titleBarStyle: 'hiddenInset',
+    frame: false,
+    titleBarStyle: 'hidden',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -42,6 +43,31 @@ function createWindow() {
     win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
   }
 }
+
+ipcMain.handle('window:minimize', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize()
+  return { ok: true }
+})
+
+ipcMain.handle('window:toggle-maximize', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win) return { ok: false, maximized: false }
+
+  if (win.isMaximized()) win.unmaximize()
+  else win.maximize()
+
+  return { ok: true, maximized: win.isMaximized() }
+})
+
+ipcMain.handle('window:close', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.close()
+  return { ok: true }
+})
+
+ipcMain.handle('window:is-maximized', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  return { maximized: Boolean(win?.isMaximized()) }
+})
 
 async function closePlc() {
   if (opcSession) {
