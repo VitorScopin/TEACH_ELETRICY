@@ -35,6 +35,7 @@ import type { IntersectionTrafficState, PlcConfig, SignalId, TrafficState } from
 
 type Mode = 'simulation' | 'plc'
 type TrafficKey = 'red' | 'yellow' | 'green'
+type HubPanel = 'simulation' | 'validation' | 's7' | 'opcua'
 type OpcTagTestState = {
   loading: boolean
   ok?: boolean
@@ -110,6 +111,7 @@ const stateLabel: Record<string, string> = {
 
 function App() {
   const [mode, setMode] = useState<Mode>('simulation')
+  const [hubPanel, setHubPanel] = useState<HubPanel>('simulation')
   const [traffic, setTraffic] = useState<TrafficState>(lightToState('red'))
   const [signals, setSignals] = useState<IntersectionTrafficState>(() =>
     buildSimulationSignals(lightToState('red')),
@@ -327,40 +329,55 @@ function App() {
       </div>
 
       <div className="app-shell">
-        <aside className="sidebar">
-          <div className="brand">
-            <div className="brand-mark"><Zap size={27} /></div>
-            <div>
-              <strong>TEACH ELETRICY</strong>
-              <span>AUTOMAÇÃO INDUSTRIAL</span>
-            </div>
+        <aside className="command-rail">
+          <div className="rail-brand" title="TEACH ELETRICY">
+            <Zap size={24} />
           </div>
 
-          <nav>
-            <button className="nav-item active"><FlaskConical size={19} /><span>Laboratório</span></button>
-            <button className="nav-item"><FolderOpen size={19} /><span>Biblioteca de projetos</span></button>
-            <button className="nav-item"><BookOpen size={19} /><span>Trilha de estudo</span></button>
-            <button className="nav-item"><Cpu size={19} /><span>Conexões PLC</span></button>
+          <nav className="rail-nav">
+            <button
+              className={`rail-button ${hubPanel === 'simulation' ? 'active' : ''}`}
+              onClick={() => setHubPanel('simulation')}
+              title="Simulação"
+            >
+              <FlaskConical size={19} />
+              <span>Simulação</span>
+            </button>
+            <button
+              className={`rail-button ${hubPanel === 'validation' ? 'active' : ''}`}
+              onClick={() => setHubPanel('validation')}
+              title="Validação"
+            >
+              <ShieldCheck size={19} />
+              <span>Validação</span>
+            </button>
+            <button
+              className={`rail-button ${hubPanel === 's7' ? 'active' : ''}`}
+              onClick={() => {
+                setHubPanel('s7')
+                if (!connected) setConfig({...config, protocol:'s7'})
+              }}
+              title="Configuração Siemens S7"
+            >
+              <Cpu size={19} />
+              <span>Siemens</span>
+            </button>
+            <button
+              className={`rail-button ${hubPanel === 'opcua' ? 'active' : ''}`}
+              onClick={() => {
+                setHubPanel('opcua')
+                if (!connected) setConfig({...config, protocol:'opcua'})
+              }}
+              title="Configuração Altus OPC UA"
+            >
+              <Radio size={19} />
+              <span>Altus OPC</span>
+            </button>
           </nav>
 
-          <div className="sidebar-progress">
-            <div className="progress-head">
-              <BarChart3 size={17} />
-              <strong>Projeto 01</strong>
-              <span>1/12</span>
-            </div>
-            <div className="progress"><span /></div>
-          </div>
-
-          <div className="industrial-art" aria-hidden="true">
-            <div className="tower t1" /><div className="tower t2" /><div className="tower t3" />
-            <div className="pipe p1" /><div className="pipe p2" /><div className="pipe p3" />
-            <div className="plant-glow" />
-          </div>
-
-          <div className="sidebar-motto">
-            <span>APRENDER</span><span>SIMULAR</span><span>CONECTAR</span><span>EVOLUIR</span><i />
-          </div>
+          <button className="rail-reset" onClick={resetLab} title="Reiniciar laboratório">
+            <RotateCcw size={18} />
+          </button>
         </aside>
 
         <main>
@@ -475,6 +492,7 @@ function App() {
             </section>
 
             <aside className="right-column">
+              {(hubPanel === 'validation' || hubPanel === 'simulation') && (
               <section className="panel validation-card">
                 <div className="panel-kicker"><FlaskConical size={16} /><span>LIVE VALIDATOR</span></div>
                 <div className="validator-header">
@@ -508,7 +526,9 @@ function App() {
                   </div>
                 </div>
               </section>
+              )}
 
+              {(hubPanel === 's7' || hubPanel === 'opcua') && (
               <section className="panel connection-card">
                 <div className="connection-top">
                   <div className="panel-kicker"><Cpu size={16} /><span>CONEXÃO INDUSTRIAL</span></div>
@@ -741,6 +761,7 @@ function App() {
                   <button className="settings-button"><Settings2 size={17}/></button>
                 </div>
               </section>
+              )}
             </aside>
           </section>
 
