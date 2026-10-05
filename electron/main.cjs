@@ -225,16 +225,22 @@ function opcDaExchange(request) {
 
 async function connectOpcDa(config) {
   const tags = normalizeTags(config.opcDaTags, {})
+  const mapped = []
   const fullTags = []
 
   for (const signalId of SIGNAL_IDS) {
     for (const lightKey of LIGHT_KEYS) {
-      const fullAddress = resolveOpcDaAddress(config, tags[signalId]?.[lightKey])
-      if (!fullAddress) {
-        throw new Error(`Tag OPC DA não configurada: ${signalId} / ${lightKey}`)
-      }
+      const rawAddress = tags[signalId]?.[lightKey]
+      const fullAddress = resolveOpcDaAddress(config, rawAddress)
+      if (!fullAddress) continue
+
+      mapped.push({ signalId, lightKey, tag: fullAddress })
       fullTags.push(fullAddress)
     }
+  }
+
+  if (!fullTags.length) {
+    throw new Error('Configure pelo menos uma tag OPC DA para iniciar o monitoramento.')
   }
 
   const candidates = opcDaBridgeCandidates(config.opcDaArchitecture)
@@ -262,12 +268,14 @@ async function connectOpcDa(config) {
         ...config,
         protocol: 'opcda',
         opcDaTags: tags,
+        opcDaMapped: mapped,
       }
       plcConnected = true
 
       return {
         ok: true,
-        message: `Altus OPC DA conectado via ${result?.architecture || 'bridge'}`,
+        message: `Altus OPC DA conectado via ${result?.architecture || 'bridge'} • ${mapped.length} tag(s)`,
+        mapped,
         config: activeConfig,
       }
     } catch (error) {
@@ -280,20 +288,12 @@ async function connectOpcDa(config) {
 }
 
 async function readOpcDaTraffic() {
-  const tags = activeConfig?.opcDaTags
-  if (!tags || !opcDaBridge) {
+  const descriptors = activeConfig?.opcDaMapped || []
+  if (!opcDaBridge) {
     return { ok: false, message: 'OPC DA desconectado' }
   }
-
-  const descriptors = []
-  for (const signalId of SIGNAL_IDS) {
-    for (const lightKey of LIGHT_KEYS) {
-      descriptors.push({
-        signalId,
-        lightKey,
-        tag: resolveOpcDaAddress(activeConfig, tags[signalId]?.[lightKey]),
-      })
-    }
+  if (!descriptors.length) {
+    return { ok: false, message: 'Nenhuma tag OPC DA está mapeada' }
   }
 
   const results = await opcDaExchange({
@@ -314,7 +314,13 @@ async function readOpcDaTraffic() {
     signals[descriptor.signalId][descriptor.lightKey] = Boolean(result.value)
   })
 
-  return { ok: true, values: signals, at: Date.now(), protocol: 'opcda' }
+  return {
+    ok: true,
+    values: signals,
+    mapped: descriptors.map(({ signalId, lightKey }) => ({ signalId, lightKey })),
+    at: Date.now(),
+    protocol: 'opcda',
+  }
 }
 
 async function testOpcDaTag(config, signalId, lightKey) {
@@ -322,8 +328,11 @@ async function testOpcDaTag(config, signalId, lightKey) {
     return { ok: false, message: 'Conecte ao OPC DA antes de testar a tag' }
   }
 
-  const address = resolveOpcDaAddress(config || activeConfig, activeConfig.opcDaTags?.[signalId]?.[lightKey])
-  if (!address) return { ok: false, message: 'Tag OPC DA não configurada' }
+  const descriptor = activeConfig.opcDaMapped?.find(
+    (item) => item.signalId === signalId && item.lightKey === lightKey
+  )
+  const address = descriptor?.tag
+  if (!address) return { ok: false, message: 'Essa lâmpada não está mapeada no OPC DA' }
 
   try {
     const result = (await opcDaExchange({ command: 'read', tags: [address] }))[0]
