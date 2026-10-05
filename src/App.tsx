@@ -35,7 +35,7 @@ import type { IntersectionTrafficState, PlcConfig, SignalId, TrafficState } from
 
 type Mode = 'simulation' | 'plc'
 type TrafficKey = 'red' | 'yellow' | 'green'
-type HubPanel = 'simulation' | 'validation' | 's7' | 'opcua'
+type HubPanel = 'connections' | 'settings' | null
 type OpcTagTestState = {
   loading: boolean
   ok?: boolean
@@ -141,7 +141,7 @@ const stateLabel: Record<string, string> = {
 
 function App() {
   const [mode, setMode] = useState<Mode>('simulation')
-  const [hubPanel, setHubPanel] = useState<HubPanel>('simulation')
+  const [hubPanel, setHubPanel] = useState<HubPanel>(null)
   const [traffic, setTraffic] = useState<TrafficState>(lightToState('red'))
   const [signals, setSignals] = useState<IntersectionTrafficState>(() =>
     buildSimulationSignals(lightToState('red')),
@@ -362,426 +362,164 @@ function App() {
   }
 
   return (
-    <div className="desktop-frame">
-      <div className="window-strip">
-        <div className="window-dots"><i /><i /><i /></div>
-        <div className="window-title">TEACH ELETRICY • INDUSTRIAL LEARNING LAB</div>
-        <div className="window-actions"><span>—</span><span>□</span><span>×</span></div>
-      </div>
+    <div className="immersive-app">
+      <aside className="immersive-rail">
+        <div className="immersive-brand" title="TEACH ELETRICY">
+          <Zap size={24} />
+        </div>
 
-      <div className="app-shell">
-        <aside className="command-rail">
-          <div className="rail-brand" title="TEACH ELETRICY">
-            <Zap size={24} />
+        <nav className="immersive-nav">
+          <button
+            className={`immersive-nav-button ${hubPanel === 'connections' ? 'active' : ''}`}
+            onClick={() => setHubPanel((current) => current === 'connections' ? null : 'connections')}
+            title="Conexões"
+          >
+            <Cable size={20} />
+            <span>Conexões</span>
+          </button>
+
+          <button
+            className={`immersive-nav-button ${hubPanel === 'settings' ? 'active' : ''}`}
+            onClick={() => setHubPanel((current) => current === 'settings' ? null : 'settings')}
+            title="Configurações"
+          >
+            <Settings2 size={20} />
+            <span>Configurações</span>
+          </button>
+        </nav>
+
+        <div className="immersive-status">
+          <i className={connected ? 'online' : ''} />
+          <span>{connected ? 'ONLINE' : 'LOCAL'}</span>
+        </div>
+      </aside>
+
+      <main className="immersive-stage">
+        <TrafficSimulation3D signals={signals} running={running} />
+
+        <div className="immersive-topbar">
+          <div className="immersive-title">
+            <span>TEACH ELETRICY</span>
+            <strong>Semáforo Inteligente</strong>
           </div>
 
-          <nav className="rail-nav">
+          <div className="immersive-runtime">
+            <div>
+              <span>Fonte</span>
+              <strong>
+                {mode === 'plc'
+                  ? config.protocol === 'opcua'
+                    ? 'ALTUS OPC UA'
+                    : 'SIEMENS S7'
+                  : 'SIMULAÇÃO'}
+              </strong>
+            </div>
+            <div>
+              <span>Estado</span>
+              <strong><i className={`state-led ${activeLight}`} />{stateLabel[activeLight]}</strong>
+            </div>
             <button
-              className={`rail-button ${hubPanel === 'simulation' ? 'active' : ''}`}
-              onClick={() => setHubPanel('simulation')}
-              title="Simulação"
+              className="immersive-pause"
+              onClick={() => setRunning((value) => !value)}
+              title={running ? 'Pausar simulação' : 'Continuar simulação'}
             >
-              <FlaskConical size={19} />
-              <span>Simulação</span>
+              {running ? <Pause size={15} /> : <Play size={15} />}
             </button>
+          </div>
+        </div>
+
+        {hubPanel && (
+          <>
             <button
-              className={`rail-button ${hubPanel === 'validation' ? 'active' : ''}`}
-              onClick={() => setHubPanel('validation')}
-              title="Validação"
-            >
-              <ShieldCheck size={19} />
-              <span>Validação</span>
-            </button>
-            <button
-              className={`rail-button ${hubPanel === 's7' ? 'active' : ''}`}
-              onClick={() => {
-                setHubPanel('s7')
-                if (!connected) setConfig({...config, protocol:'s7'})
-              }}
-              title="Configuração Siemens S7"
-            >
-              <Cpu size={19} />
-              <span>Siemens</span>
-            </button>
-            <button
-              className={`rail-button ${hubPanel === 'opcua' ? 'active' : ''}`}
-              onClick={() => {
-                setHubPanel('opcua')
-                if (!connected) setConfig({...config, protocol:'opcua'})
-              }}
-              title="Configuração Altus OPC UA"
-            >
-              <Radio size={19} />
-              <span>Altus OPC</span>
-            </button>
-          </nav>
+              className="panel-backdrop"
+              aria-label="Fechar painel"
+              onClick={() => setHubPanel(null)}
+            />
 
-          <button className="rail-reset" onClick={resetLab} title="Reiniciar laboratório">
-            <RotateCcw size={18} />
-          </button>
-        </aside>
-
-        <main>
-          <header className="topbar">
-            <div className="header-copy">
-              <div className="breadcrumb">
-                <span className="home-dot">⌂</span><ChevronRight size={13} />
-                Projetos <ChevronRight size={13} /> Fundamentos <ChevronRight size={13} /> Projeto 01
-              </div>
-              <div className="title-line">
-                <h1>Semáforo Inteligente</h1>
-                <div className="difficulty">INICIANTE</div>
-              </div>
-              <p>Construa a lógica no <b>TIA Portal</b> e valide o funcionamento em uma planta virtual realista.</p>
-            </div>
-
-            <div className="top-actions">
-              <button
-                className={mode === 'simulation' ? 'run-status active' : 'run-status'}
-                onClick={() => {
-                  setMode('simulation')
-                  setConnected(false)
-                  setConnectionMessage('Ambiente virtual pronto')
-                }}
-              >
-                <Play size={14} fill="currentColor" />
-                SIMULAÇÃO ATIVA
-              </button>
-              <button className="icon-button" onClick={resetLab} title="Reiniciar laboratório"><RotateCcw size={16} /></button>
-            </div>
-          </header>
-
-          <section className="mission-strip">
-            <div className="mission-item">
-              <div className="stat-icon blue"><Sparkles size={19} /></div>
-              <div><span>MISSÃO</span><strong>Crie um ciclo seguro com 3 estados</strong></div>
-            </div>
-            <div className="mission-item">
-              <div className="stat-icon blue"><Clock3 size={19} /></div>
-              <div><span>TEMPO ESTIMADO</span><strong>{trafficLightProject.estimatedMinutes} min</strong></div>
-            </div>
-            <div className="mission-item">
-              <div className="stat-icon red"><AlertTriangle size={19} /></div>
-              <div><span>REGRA CRÍTICA</span><strong>1 saída ativa por vez</strong></div>
-            </div>
-            <div className="mission-item score-card">
-              <div className="stat-icon cyan"><BarChart3 size={19} /></div>
-              <div><span>VALIDAÇÃO</span><strong>{score}%</strong></div>
-            </div>
-          </section>
-
-          <section className="workspace-grid">
-            <section className="simulation-card panel">
-              <div className="city-lab city-lab-3d">
-                <TrafficSimulation3D
-                  signals={signals}
-                  running={running}
-                />
-
-                <div className="telemetry-overlay">
-                  <div><span>Estado Atual</span><strong><i className={`state-led ${activeLight}`} />{stateLabel[activeLight]}</strong></div>
-                  <div>
-                    <span>Fonte</span>
-                    <strong>
-                      {mode === 'plc'
-                        ? config.protocol === 'opcua'
-                          ? 'MasterTool / Altus OPC UA'
-                          : 'TIA Portal / Siemens S7'
-                        : 'Simulador interno'}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Tempo fase</span>
-                    <PhaseElapsedDisplay
-                      startedAt={phaseStartedAt}
-                      durationMs={steps[phase]?.durationMs ?? 0}
-                    />
-                  </div>
-                  <div><span>Scan do PLC</span><strong>{mode === 'plc' ? '250 ms' : 'LOCAL'}</strong></div>
+            <aside className="immersive-drawer">
+              <div className="drawer-header">
+                <div>
+                  <span>{hubPanel === 'connections' ? 'COMUNICAÇÃO INDUSTRIAL' : 'LABORATÓRIO'}</span>
+                  <h2>{hubPanel === 'connections' ? 'Conexões' : 'Configurações'}</h2>
                 </div>
-
-                <div className="plant-virtual">
-                  <Building2 size={17} />
-                  <div><span>PLANTA VIRTUAL</span><strong>Interseção 3D</strong></div>
-                  <ChevronRight size={14} className="rotate-90" />
-                </div>
+                <button className="drawer-close" onClick={() => setHubPanel(null)}>×</button>
               </div>
 
-              <div className="phase-control">
-                <div className="phase-title">
-                  <strong>CONTROLE DAS FASES</strong>
-                  <span>Ajuste os tempos para testar sua lógica</span>
-                </div>
-                <div className="phase-row">
-                  {steps.map((step, index) => (
+              {hubPanel === 'connections' ? (
+                <div className="drawer-content">
+                  <div className="connection-choice">
                     <button
-                      key={step.key}
-                      className={`phase-card ${step.key} ${mode === 'simulation' && phase === index ? 'active' : ''}`}
-                      onClick={() => {
-                        setMode('simulation')
-                        setPhase(index)
-                        const selected = lightToState(step.key)
-                        setTraffic(selected)
-                        setSignals(buildSimulationSignals(selected))
-                      }}
+                      className={config.protocol === 's7' ? 'active' : ''}
+                      disabled={connected}
+                      onClick={() => setConfig({...config, protocol:'s7'})}
                     >
-                      <i className={`phase-lamp ${step.key}`} />
-                      <div><span>{step.label}</span><strong>{step.durationMs / 1000} segundos</strong></div>
-                      <div className="phase-arrows"><span>⌃</span><span>⌄</span></div>
-                    </button>
-                  ))}
-                  <button className="execute-button" onClick={() => setRunning((v) => !v)}>
-                    {running ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
-                    {running ? 'Pausar ciclo' : 'Executar ciclo'}
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <aside className="right-column">
-              {(hubPanel === 'validation' || hubPanel === 'simulation') && (
-              <section className="panel validation-card">
-                <div className="panel-kicker"><FlaskConical size={16} /><span>LIVE VALIDATOR</span></div>
-                <div className="validator-header">
-                  <h2>Validação da lógica</h2>
-                  <div className="score-ring" style={{'--score': `${score * 3.6}deg`} as React.CSSProperties}>
-                    <div>{score}<small>%</small></div>
-                  </div>
-                </div>
-
-                <div className="validation-list">
-                  {validations.map((item) => (
-                    <div className={`validation-item ${item.status}`} key={item.id}>
-                      <div className="validation-icon">
-                        {item.status === 'pass' ? <Check size={13} /> : item.status === 'fail' ? <AlertTriangle size={13} /> : <CircleDot size={11} />}
-                      </div>
-                      <strong>{item.title}</strong>
-                      <span>{item.status === 'pass' ? 'OK' : item.status === 'fail' ? 'ERRO' : '...'}</span>
-                    </div>
-                  ))}
-                  <div className={`validation-item ${sequenceFault ? 'fail' : sequencePass ? 'pass' : 'waiting'}`}>
-                    <div className="validation-icon">{sequenceFault ? <AlertTriangle size={13} /> : sequencePass ? <Check size={13} /> : <CircleDot size={11} />}</div>
-                    <strong>Ordem da sequência</strong><span>{sequenceFault ? 'ERRO' : sequencePass ? 'OK' : '...'}</span>
-                  </div>
-                  <div className={`validation-item ${timingPass.size === 3 ? 'pass' : 'waiting'}`}>
-                    <div className="validation-icon">{timingPass.size === 3 ? <Check size={13} /> : <Clock3 size={11} />}</div>
-                    <strong>Temporização das fases</strong><span>{timingPass.size === 3 ? 'OK' : '...'}</span>
-                  </div>
-                  <div className={`validation-item ${allPhasesSeen ? 'pass' : 'waiting'}`}>
-                    <div className="validation-icon">{allPhasesSeen ? <Check size={13} /> : <CircleDot size={11} />}</div>
-                    <strong>Ciclo completo observado</strong><span>{allPhasesSeen ? 'OK' : 'AGUARDANDO'}</span>
-                  </div>
-                </div>
-              </section>
-              )}
-
-              {(hubPanel === 's7' || hubPanel === 'opcua') && (
-              <section className="panel connection-card">
-                <div className="connection-top">
-                  <div className="panel-kicker"><Cpu size={16} /><span>CONEXÃO INDUSTRIAL</span></div>
-                  <div className={connected ? 'plc-status online' : 'plc-status'}><i />{connected ? 'PLC ONLINE' : 'OFFLINE'}</div>
-                </div>
-                <h2>{config.protocol === 'opcua' ? 'Altus OPC UA' : 'Siemens S7'}</h2>
-
-                <div className="protocol-selector">
-                  <button
-                    className={config.protocol === 's7' ? 'active' : ''}
-                    disabled={connected}
-                    onClick={() => setConfig({...config, protocol:'s7'})}
-                  >
-                    Siemens S7
-                  </button>
-                  <button
-                    className={config.protocol === 'opcua' ? 'active' : ''}
-                    disabled={connected}
-                    onClick={() => setConfig({...config, protocol:'opcua'})}
-                  >
-                    Altus OPC UA
-                  </button>
-                </div>
-
-                {config.protocol === 's7' ? (
-                  <div className="connection-fields">
-                    <label className="ip-field">Endereço IP<input value={config.host} onChange={(e) => setConfig({...config,host:e.target.value})}/></label>
-                    <label>Rack<input type="number" value={config.rack} onChange={(e)=>setConfig({...config,rack:Number(e.target.value)})}/></label>
-                    <label>Slot<input type="number" value={config.slot} onChange={(e)=>setConfig({...config,slot:Number(e.target.value)})}/></label>
-                  </div>
-                ) : (
-                  <div className="opc-config">
-                    <label>
-                      Endpoint OPC UA
-                      <input
-                        value={config.opcEndpoint}
-                        onChange={(e)=>setConfig({...config,opcEndpoint:e.target.value})}
-                        placeholder="opc.tcp://192.168.15.1:4840"
-                      />
-                    </label>
-                    <div className="opc-security-row">
-                      <label>
-                        Security Mode
-                        <select
-                          value={config.opcSecurityMode}
-                          onChange={(e)=>setConfig({...config,opcSecurityMode:e.target.value as PlcConfig['opcSecurityMode']})}
-                        >
-                          <option value="None">None</option>
-                          <option value="Sign">Sign</option>
-                          <option value="SignAndEncrypt">SignAndEncrypt</option>
-                        </select>
-                      </label>
-                      <label>
-                        Security Policy
-                        <select
-                          value={config.opcSecurityPolicy}
-                          onChange={(e)=>setConfig({...config,opcSecurityPolicy:e.target.value as PlcConfig['opcSecurityPolicy']})}
-                        >
-                          <option value="None">None</option>
-                          <option value="Basic256Sha256">Basic256Sha256</option>
-                        </select>
-                      </label>
-                    </div>
-                    <div className="opc-security-row">
-                      <label>Usuário (opcional)<input value={config.opcUsername} onChange={(e)=>setConfig({...config,opcUsername:e.target.value})}/></label>
-                      <label>Senha (opcional)<input type="password" value={config.opcPassword} onChange={(e)=>setConfig({...config,opcPassword:e.target.value})}/></label>
-                    </div>
-                    <small className="opc-hint">
-                      Para teste rápido no XP340 use porta 4840 e segurança None. Os NodeIds abaixo podem variar conforme o projeto; confirme-os no UaExpert/cliente OPC.
-                    </small>
-                  </div>
-                )}
-
-                {config.protocol === 'opcua' ? (
-                  <>
-                    <div className="opc-mapping-head">
+                      <Cpu size={19} />
                       <div>
-                        <span>MAPEAMENTO OPC → LÂMPADAS</span>
-                        <small>Cada NodeId abaixo controla diretamente uma lâmpada da cena 3D.</small>
+                        <strong>Siemens S7</strong>
+                        <span>ISO-on-TCP / porta 102</span>
                       </div>
-                      <button
-                        className="opc-sync-button"
-                        onClick={syncOpcTags}
-                        title="Aplicar o mapeamento atual sem reconectar"
-                      >
-                        <Radio size={13} />
-                        Sincronizar tags
-                      </button>
-                    </div>
+                      <i />
+                    </button>
+                    <button
+                      className={config.protocol === 'opcua' ? 'active' : ''}
+                      disabled={connected}
+                      onClick={() => setConfig({...config, protocol:'opcua'})}
+                    >
+                      <Radio size={19} />
+                      <div>
+                        <strong>Altus OPC UA</strong>
+                        <span>XP340 / MasterTool</span>
+                      </div>
+                      <i />
+                    </button>
+                  </div>
 
-                    <div className="opc-mapping-grid">
-                      {trafficLightProject.signals.map((signal) => {
-                        const signalId = signal.id as SignalId
-                        return (
-                          <div className="opc-signal-card" key={signal.id}>
-                            <div className="opc-signal-title">
-                              <strong>Semáforo {signal.label}</strong>
-                              <span>{connected ? 'SINCRONIZAÇÃO AO VIVO' : 'AGUARDANDO CONEXÃO'}</span>
-                            </div>
+                  <div className="drawer-divider" />
 
-                            {signal.tags.map((tag) => {
-                              const lightKey = tag.key as TrafficKey
-                              const testKey = `${signal.id}:${tag.key}`
-                              const test = opcTagTests[testKey]
-                              const liveValue = signals[signalId][lightKey]
+                  {config.protocol === 's7' ? (
+                    <div className="drawer-section">
+                      <div className="drawer-section-title">
+                        <span>CONFIGURAÇÃO SIEMENS</span>
+                        <strong>S7 Connection</strong>
+                      </div>
 
-                              return (
-                                <div
-                                  className={`opc-tag-map ${connected && liveValue ? 'live-on' : ''}`}
-                                  key={testKey}
-                                >
-                                  <div className="opc-lamp-binding">
-                                    <i className={`tag-dot ${tag.key} ${connected && liveValue ? 'on' : ''}`} />
-                                    <div>
-                                      <strong>{tag.label}</strong>
-                                      <small>{signal.label} → {tag.label}</small>
-                                    </div>
-                                  </div>
+                      <div className="drawer-fields three">
+                        <label>
+                          Endereço IP
+                          <input value={config.host} onChange={(e)=>setConfig({...config,host:e.target.value})}/>
+                        </label>
+                        <label>
+                          Rack
+                          <input type="number" value={config.rack} onChange={(e)=>setConfig({...config,rack:Number(e.target.value)})}/>
+                        </label>
+                        <label>
+                          Slot
+                          <input type="number" value={config.slot} onChange={(e)=>setConfig({...config,slot:Number(e.target.value)})}/>
+                        </label>
+                      </div>
 
-                                  <input
-                                    className="opc-node-input"
-                                    value={config.opcTags[signalId][lightKey]}
-                                    onChange={(e) => {
-                                      setConfig({
-                                        ...config,
-                                        opcTags: {
-                                          ...config.opcTags,
-                                          [signalId]: {
-                                            ...config.opcTags[signalId],
-                                            [lightKey]: e.target.value,
-                                          },
-                                        },
-                                      })
-                                      setOpcTagTests((current) => ({
-                                        ...current,
-                                        [testKey]: { loading: false },
-                                      }))
-                                    }}
-                                    placeholder="ns=4;s=|var|Application.GVL..."
-                                    title="NodeId OPC UA"
-                                  />
+                      <div className="drawer-section-title compact">
+                        <span>MEMÓRIAS DOS SEMÁFOROS</span>
+                      </div>
 
-                                  <button
-                                    className="opc-test-button"
-                                    disabled={!connected || test?.loading}
-                                    onClick={() => testOpcTag(signalId, lightKey)}
-                                  >
-                                    {test?.loading ? '...' : 'Testar'}
-                                  </button>
-
-                                  <span
-                                    className={`opc-live-value ${
-                                      test?.ok
-                                        ? test.value
-                                          ? 'true'
-                                          : 'false'
-                                        : connected
-                                          ? liveValue
-                                            ? 'true'
-                                            : 'false'
-                                          : ''
-                                    }`}
-                                    title={test?.message || 'Valor BOOL atual'}
-                                  >
-                                    {test?.loading
-                                      ? 'LENDO'
-                                      : test?.ok
-                                        ? test.value
-                                          ? 'TRUE'
-                                          : 'FALSE'
-                                        : connected
-                                          ? liveValue
-                                            ? 'TRUE'
-                                            : 'FALSE'
-                                          : '—'}
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="tag-heading">Memórias dos semáforos</div>
-                    <div className="signal-memory-grid">
-                      {trafficLightProject.signals.map((signal) => (
-                        <div className="signal-memory-group" key={signal.id}>
-                          <strong>{signal.label}</strong>
-                          <div className="tag-list">
+                      <div className="drawer-signal-grid">
+                        {trafficLightProject.signals.map((signal) => (
+                          <div className="drawer-signal-card" key={signal.id}>
+                            <strong>{signal.label}</strong>
                             {signal.tags.map((tag) => (
                               <label key={`${signal.id}-${tag.key}`}>
-                                <i className={`tag-dot ${tag.key}`}/>
+                                <i className={`tag-dot ${tag.key}`} />
                                 <span>{tag.label}</span>
                                 <input
                                   value={config.tags[signal.id as SignalId][tag.key]}
                                   onChange={(e) =>
                                     setConfig({
                                       ...config,
-                                      tags: {
+                                      tags:{
                                         ...config.tags,
-                                        [signal.id]: {
+                                        [signal.id]:{
                                           ...config.tags[signal.id as SignalId],
-                                          [tag.key]: e.target.value,
+                                          [tag.key]:e.target.value,
                                         },
                                       },
                                     })
@@ -790,60 +528,212 @@ function App() {
                               </label>
                             ))}
                           </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="drawer-section">
+                      <div className="drawer-section-title">
+                        <span>CONFIGURAÇÃO ALTUS</span>
+                        <strong>OPC UA Client</strong>
+                      </div>
+
+                      <div className="drawer-fields">
+                        <label>
+                          Endpoint OPC UA
+                          <input
+                            value={config.opcEndpoint}
+                            onChange={(e)=>setConfig({...config,opcEndpoint:e.target.value})}
+                            placeholder="opc.tcp://192.168.15.1:4840"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="drawer-fields two">
+                        <label>
+                          Security Mode
+                          <select
+                            value={config.opcSecurityMode}
+                            onChange={(e)=>setConfig({...config,opcSecurityMode:e.target.value as PlcConfig['opcSecurityMode']})}
+                          >
+                            <option value="None">None</option>
+                            <option value="Sign">Sign</option>
+                            <option value="SignAndEncrypt">SignAndEncrypt</option>
+                          </select>
+                        </label>
+                        <label>
+                          Security Policy
+                          <select
+                            value={config.opcSecurityPolicy}
+                            onChange={(e)=>setConfig({...config,opcSecurityPolicy:e.target.value as PlcConfig['opcSecurityPolicy']})}
+                          >
+                            <option value="None">None</option>
+                            <option value="Basic256Sha256">Basic256Sha256</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="drawer-fields two">
+                        <label>
+                          Usuário
+                          <input value={config.opcUsername} onChange={(e)=>setConfig({...config,opcUsername:e.target.value})}/>
+                        </label>
+                        <label>
+                          Senha
+                          <input type="password" value={config.opcPassword} onChange={(e)=>setConfig({...config,opcPassword:e.target.value})}/>
+                        </label>
+                      </div>
+
+                      <div className="drawer-section-title compact mapping-title">
+                        <div>
+                          <span>MAPEAMENTO OPC → LÂMPADAS</span>
+                          <small>Associe cada NodeId à lâmpada correspondente.</small>
+                        </div>
+                        <button className="drawer-sync" onClick={syncOpcTags}>
+                          <Radio size={13}/> Sincronizar
+                        </button>
+                      </div>
+
+                      <div className="drawer-opc-signals">
+                        {trafficLightProject.signals.map((signal) => {
+                          const signalId = signal.id as SignalId
+                          return (
+                            <div className="drawer-opc-card" key={signal.id}>
+                              <div className="drawer-opc-head">
+                                <strong>{signal.label}</strong>
+                                <span>{connected ? 'AO VIVO' : 'OFFLINE'}</span>
+                              </div>
+                              {signal.tags.map((tag) => {
+                                const lightKey = tag.key as TrafficKey
+                                const testKey = `${signal.id}:${tag.key}`
+                                const test = opcTagTests[testKey]
+                                const liveValue = signals[signalId][lightKey]
+                                return (
+                                  <div className="drawer-opc-row" key={testKey}>
+                                    <i className={`tag-dot ${tag.key} ${connected && liveValue ? 'on' : ''}`} />
+                                    <span>{tag.label}</span>
+                                    <input
+                                      value={config.opcTags[signalId][lightKey]}
+                                      onChange={(e)=>{
+                                        setConfig({
+                                          ...config,
+                                          opcTags:{
+                                            ...config.opcTags,
+                                            [signalId]:{
+                                              ...config.opcTags[signalId],
+                                              [lightKey]:e.target.value,
+                                            },
+                                          },
+                                        })
+                                      }}
+                                    />
+                                    <button
+                                      disabled={!connected || test?.loading}
+                                      onClick={() => testOpcTag(signalId, lightKey)}
+                                    >
+                                      {test?.loading ? '...' : 'Testar'}
+                                    </button>
+                                    <b className={connected && liveValue ? 'true' : ''}>
+                                      {connected ? (liveValue ? 'TRUE' : 'FALSE') : '—'}
+                                    </b>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className={connected ? 'drawer-health online' : 'drawer-health'}>
+                    <ShieldCheck size={15}/>
+                    <span>{connectionMessage}</span>
+                  </div>
+
+                  <button
+                    className={connected ? 'drawer-connect danger' : 'drawer-connect'}
+                    onClick={connected ? disconnect : connect}
+                  >
+                    {connected ? <Unplug size={17}/> : <PlugZap size={17}/>}
+                    {connected ? 'Desconectar' : `Conectar via ${config.protocol === 'opcua' ? 'OPC UA' : 'Siemens S7'}`}
+                  </button>
+                </div>
+              ) : (
+                <div className="drawer-content settings-content">
+                  <div className="drawer-section">
+                    <div className="drawer-section-title">
+                      <span>SIMULAÇÃO</span>
+                      <strong>Controle do laboratório</strong>
+                    </div>
+
+                    <div className="settings-runtime-card">
+                      <div>
+                        <span>Execução</span>
+                        <strong>{running ? 'Em andamento' : 'Pausada'}</strong>
+                      </div>
+                      <button onClick={() => setRunning((value)=>!value)}>
+                        {running ? <Pause size={15}/> : <Play size={15}/>}
+                        {running ? 'Pausar' : 'Executar'}
+                      </button>
+                    </div>
+
+                    <div className="settings-phases">
+                      {steps.map((step,index)=>(
+                        <button
+                          key={step.key}
+                          className={phase === index && mode === 'simulation' ? 'active' : ''}
+                          onClick={()=>{
+                            setMode('simulation')
+                            setPhase(index)
+                            const selected=lightToState(step.key)
+                            setTraffic(selected)
+                            setSignals(buildSimulationSignals(selected))
+                          }}
+                        >
+                          <i className={`phase-lamp ${step.key}`} />
+                          <div>
+                            <span>{step.label}</span>
+                            <strong>{step.durationMs / 1000}s</strong>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <button className="settings-reset" onClick={resetLab}>
+                      <RotateCcw size={15}/> Reiniciar laboratório
+                    </button>
+                  </div>
+
+                  <div className="drawer-divider" />
+
+                  <div className="drawer-section">
+                    <div className="drawer-section-title">
+                      <span>VALIDAÇÃO</span>
+                      <strong>Diagnóstico da lógica</strong>
+                    </div>
+
+                    <div className="settings-score">
+                      <strong>{score}<small>%</small></strong>
+                      <span>pontuação atual</span>
+                    </div>
+
+                    <div className="settings-validation">
+                      {validations.map((item)=>(
+                        <div className={item.status} key={item.id}>
+                          {item.status === 'pass' ? <Check size={13}/> : item.status === 'fail' ? <AlertTriangle size={13}/> : <CircleDot size={12}/>}
+                          <span>{item.title}</span>
+                          <b>{item.status === 'pass' ? 'OK' : item.status === 'fail' ? 'ERRO' : '...'}</b>
                         </div>
                       ))}
                     </div>
-                  </>
-                )}
-
-                <div className={connected ? 'connection-health online' : 'connection-health'}>
-                  <ShieldCheck size={16}/><span>{connectionMessage}</span>
+                  </div>
                 </div>
-
-                <div className="connection-actions">
-                  <button className={connected ? 'connect-button danger' : 'connect-button'} onClick={connected ? disconnect : connect}>
-                    {connected ? <Unplug size={16}/> : <PlugZap size={16}/>}
-                    {connected ? 'Desconectar PLC' : 'Conectar ao PLC'}
-                  </button>
-                  <button className="settings-button"><Settings2 size={17}/></button>
-                </div>
-              </section>
               )}
             </aside>
-          </section>
-
-          <section className="bottom-grid">
-            <section className="panel mission-bottom">
-              <div className="bottom-heading">
-                <div className="mini-icon cyan"><Network size={16}/></div>
-                <div><span>MISSÃO DO PROJETO</span><p>Implemente um semáforo de 3 estados com temporização e ciclo contínuo.</p></div>
-              </div>
-              <div className="objective-row">
-                {steps.map(step=>(
-                  <div className="objective-card" key={step.key}>
-                    <i className={`phase-lamp ${step.key}`}/>
-                    <div><span>{step.label}</span><strong>{step.durationMs/1000} segundos</strong><small>{step.key==='red'?'Via principal fechada':step.key==='green'?'Via principal liberada':'Transição de segurança'}</small></div>
-                  </div>
-                ))}
-                <div className="objective-card">
-                  <RotateCcw size={20}/>
-                  <div><span>Ciclo contínuo</span><strong>Automático</strong><small>Repete automaticamente a sequência</small></div>
-                </div>
-              </div>
-            </section>
-
-            <section className="panel engineering-tip">
-              <div className="tip-icon"><Lightbulb size={19}/></div>
-              <div>
-                <span>DICA DE ENGENHARIA</span>
-                <h3>Pense em estados, não em lâmpadas.</h3>
-                <p>Modele o problema como uma máquina de estados (FSM). Em cada estado, defina o tempo, a condição de transição e quais saídas devem estar ativas.</p>
-              </div>
-              <div className="brain-orb"><Cpu size={30}/></div>
-            </section>
-          </section>
-        </main>
-      </div>
+          </>
+        )}
+      </main>
     </div>
   )
 }
