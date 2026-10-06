@@ -76,6 +76,12 @@ function roundaboutState(pose: VehiclePose) {
       radius > ROUNDABOUT.islandRadius + 0.7 &&
       radius < ROUNDABOUT.roadOuterRadius + 0.45 &&
       tangentialDot > 0.58,
+    // Once the center crosses inside this radius the driver has already passed
+    // the give-way line. They must finish the merge instead of stopping halfway
+    // through the entry arc.
+    committed:
+      radius > ROUNDABOUT.islandRadius + 0.7 &&
+      radius < ROUNDABOUT.roadOuterRadius + 2.55,
     approaching:
       radius >= ROUNDABOUT.roadOuterRadius - 0.2 &&
       radius < ROUNDABOUT.roadOuterRadius + 13 &&
@@ -212,7 +218,7 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
 
     // Give way BEFORE entering the circle. The old logic only reacted when
     // footprints were nearly intersecting, which caused abrupt stops/collisions.
-    if (selfRoundabout.approaching) {
+    if (selfRoundabout.approaching && !selfRoundabout.committed) {
       if (otherRoundabout.circulating) {
         // Yield only when the circulating car is actually approaching THIS
         // entry. A car that has already passed the entry must not block it
@@ -223,8 +229,13 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
         if (arcToEntry < 13.5) {
           limit = Math.min(limit, roundaboutYieldSpeed(selfRoundabout.clearance))
         }
+      } else if (otherRoundabout.committed && separation < 18) {
+        // A vehicle that already crossed its give-way line owns the merge until
+        // it reaches the circulating lane, regardless of static actor order.
+        limit = Math.min(limit, roundaboutYieldSpeed(selfRoundabout.clearance))
       } else if (
         otherRoundabout.approaching &&
+        !otherRoundabout.committed &&
         other.order < self.order &&
         separation < 22
       ) {
@@ -275,18 +286,28 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
 
     const circulatingApproachesThisEntry =
       selfRoundabout.approaching &&
+      !selfRoundabout.committed &&
       otherRoundabout.circulating &&
       clockwiseAngleGap(otherRoundabout.angle, selfRoundabout.angle) *
         ROUNDABOUT.laneRadius <
         13.5
 
+    const committedOwnsMerge =
+      selfRoundabout.approaching &&
+      !selfRoundabout.committed &&
+      otherRoundabout.committed &&
+      separation < 18
+
     const yieldToOther =
       following ||
       circulatingApproachesThisEntry ||
+      committedOwnsMerge ||
       circleFollowing ||
       (
         !selfRoundabout.circulating &&
         !otherRoundabout.circulating &&
+        !selfRoundabout.committed &&
+        !otherRoundabout.committed &&
         other.order < self.order
       )
 
