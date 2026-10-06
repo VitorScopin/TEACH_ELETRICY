@@ -91,6 +91,32 @@ const defaultConfig: PlcConfig = {
   opcDaTags: defaultOpcDaTags,
 }
 
+const defaultEnvironment: WorldEnvironment = {
+  hour: 14,
+  autoTime: false,
+  timeSpeed: 60,
+  rain: 0,
+  wind: 0.15,
+  windDirection: 35,
+}
+
+type TrafficTagMap = Record<SignalId, Record<TrafficKey, string>>
+
+const mergeTagMap = (base: TrafficTagMap, saved?: Partial<TrafficTagMap>): TrafficTagMap => ({
+  west: { ...base.west, ...saved?.west },
+  east: { ...base.east, ...saved?.east },
+  north: { ...base.north, ...saved?.north },
+  south: { ...base.south, ...saved?.south },
+})
+
+const mergeProjectConfig = (saved?: Partial<PlcConfig>): PlcConfig => ({
+  ...defaultConfig,
+  ...saved,
+  tags: mergeTagMap(defaultConfig.tags as TrafficTagMap, saved?.tags as Partial<TrafficTagMap> | undefined) as PlcConfig['tags'],
+  opcTags: mergeTagMap(defaultConfig.opcTags as TrafficTagMap, saved?.opcTags as Partial<TrafficTagMap> | undefined) as PlcConfig['opcTags'],
+  opcDaTags: mergeTagMap(defaultConfig.opcDaTags as TrafficTagMap, saved?.opcDaTags as Partial<TrafficTagMap> | undefined) as PlcConfig['opcDaTags'],
+})
+
 const lightToState = (key: TrafficKey): TrafficState => ({
   red: key === 'red',
   yellow: key === 'yellow',
@@ -161,17 +187,13 @@ function App() {
   const [running, setRunning] = useState(true)
   const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>('medium')
   const [targetFps, setTargetFps] = useState(30)
-  const [environment, setEnvironment] = useState<WorldEnvironment>({
-    hour: 14,
-    autoTime: false,
-    timeSpeed: 60,
-    rain: 0,
-    wind: 0.15,
-    windDirection: 35,
-  })
+  const [environment, setEnvironment] = useState<WorldEnvironment>(defaultEnvironment)
   const [connected, setConnected] = useState(false)
   const [windowMaximized, setWindowMaximized] = useState(false)
   const [config, setConfig] = useState<PlcConfig>(defaultConfig)
+  const [projectLoaded, setProjectLoaded] = useState(false)
+  const [projectSaveLabel, setProjectSaveLabel] = useState('Carregando projeto...')
+  const [projectPath, setProjectPath] = useState('')
   const [opcTagTests, setOpcTagTests] = useState<Record<string, OpcTagTestState>>({})
   const [connectionMessage, setConnectionMessage] = useState('Ambiente virtual pronto')
   const [seenStates, setSeenStates] = useState(() => new Set<string>())
@@ -189,6 +211,91 @@ function App() {
       setWindowMaximized(result.maximized)
     }).catch(() => undefined)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadProject = async () => {
+      const projectApi = window.teachElectrify?.project
+      if (!projectApi) {
+        setProjectSaveLabel('Persistência disponível no app Electron')
+        setProjectLoaded(true)
+        return
+      }
+
+      const result = await projectApi.load()
+      if (cancelled) return
+
+      if (!result.ok) {
+        setProjectSaveLabel(result.message || 'Não foi possível carregar o projeto')
+        setProjectLoaded(true)
+        return
+      }
+
+      setProjectPath(result.path || '')
+      const saved = result.snapshot
+      if (saved) {
+        if (saved.config) setConfig(mergeProjectConfig(saved.config))
+        if (saved.graphicsQuality) setGraphicsQuality(saved.graphicsQuality)
+        if (saved.targetFps && [20, 30, 45, 60].includes(saved.targetFps)) {
+          setTargetFps(saved.targetFps)
+        }
+        if (saved.environment) {
+          setEnvironment({ ...defaultEnvironment, ...saved.environment })
+        }
+        setProjectSaveLabel('Projeto restaurado • autosave ativo')
+        setConnectionMessage('Projeto restaurado • pronto para conectar')
+      } else {
+        setProjectSaveLabel('Novo projeto • autosave ativo')
+      }
+
+      setProjectLoaded(true)
+    }
+
+    void loadProject()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const manualHourSaveKey = environment.autoTime ? -1 : environment.hour
+
+  useEffect(() => {
+    if (!projectLoaded) return
+    const projectApi = window.teachElectrify?.project
+    if (!projectApi) return
+
+    setProjectSaveLabel('Salvando alterações...')
+
+    const timer = window.setTimeout(async () => {
+      const result = await projectApi.save({
+        config,
+        graphicsQuality,
+        targetFps,
+        environment,
+      })
+
+      if (result.ok) {
+        if (result.path) setProjectPath(result.path)
+        setProjectSaveLabel('Projeto salvo automaticamente')
+      } else {
+        setProjectSaveLabel(result.message || 'Falha ao salvar projeto')
+      }
+    }, 500)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    projectLoaded,
+    config,
+    graphicsQuality,
+    targetFps,
+    environment.autoTime,
+    environment.timeSpeed,
+    environment.rain,
+    environment.wind,
+    environment.windDirection,
+    manualHourSaveKey,
+  ])
 
   useEffect(() => {
     signalsRef.current = signals
@@ -985,6 +1092,14 @@ function App() {
                     <div className="drawer-section-title">
                       <span>SIMULAÇÃO</span>
                       <strong>Controle do laboratório</strong>
+                    </div>
+
+                    <div className="project-persistence-card" title={projectPath || undefined}>
+                      <div>
+                        <span>PROJETO LOCAL</span>
+                        <strong>{projectSaveLabel}</strong>
+                      </div>
+                      <b>{projectLoaded ? 'AUTO-SAVE' : '...'}</b>
                     </div>
 
                     <div className="graphics-settings-card">
