@@ -222,10 +222,11 @@ assert(!vehicleBodiesOverlap(pose(0), 4.82, 1.9, pose(0, -1.75, Math.PI), 4.82, 
 
 // Roundabout approach must yield early to circulating traffic, not only at collision distance.
 const westApproachPose = pose(37, ROUNDABOUT.center[1], 0)
+const circulatingAngle = Math.PI + 0.55
 const circulatingPose = pose(
-  ROUNDABOUT.center[0],
-  ROUNDABOUT.center[1] + ROUNDABOUT.laneRadius,
-  0,
+  ROUNDABOUT.center[0] + Math.cos(circulatingAngle) * ROUNDABOUT.laneRadius,
+  ROUNDABOUT.center[1] + Math.sin(circulatingAngle) * ROUNDABOUT.laneRadius,
+  Math.PI / 2 - circulatingAngle,
 )
 const roundaboutRegistry = {
   current: new Map([
