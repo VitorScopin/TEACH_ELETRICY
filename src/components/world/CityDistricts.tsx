@@ -107,6 +107,50 @@ function CityBlockPad({
   )
 }
 
+function GroundArrow({
+  position,
+  rotationY = 0,
+  scale = 1,
+}: {
+  position: [number, number, number]
+  rotationY?: number
+  scale?: number
+}) {
+  return (
+    <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
+      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.18, 1.7]} />
+        <meshBasicMaterial color="#e8e7de" toneMapped={false} />
+      </mesh>
+      <mesh position={[-0.28, 0.012, 0.56]} rotation={[-Math.PI / 2, 0, -Math.PI / 4]}>
+        <planeGeometry args={[0.16, 0.78]} />
+        <meshBasicMaterial color="#e8e7de" toneMapped={false} />
+      </mesh>
+      <mesh position={[0.28, 0.012, 0.56]} rotation={[-Math.PI / 2, 0, Math.PI / 4]}>
+        <planeGeometry args={[0.16, 0.78]} />
+        <meshBasicMaterial color="#e8e7de" toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
+function YieldMark({
+  position,
+  rotationY = 0,
+}: {
+  position: [number, number, number]
+  rotationY?: number
+}) {
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.72, 0.83, 3]} />
+        <meshBasicMaterial color="#f1f0e8" toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
 function WetOverlay({
   position,
   size,
@@ -273,6 +317,10 @@ function SupermarketParking({
         ))}
       </group>
 
+      <GroundArrow position={[-27.6, 0.205, -8.25]} rotationY={Math.PI / 2} scale={0.75} />
+      <GroundArrow position={[-18.8, 0.205, -15.05]} rotationY={-Math.PI / 2} scale={0.75} />
+      <GroundArrow position={[-30.65, 0.205, -5.9]} rotationY={Math.PI} scale={0.72} />
+
       <StreetLamp position={[-30.4, 0.2, -10.1]} nightFactor={nightFactor} />
       <StreetLamp position={[-12.8, 0.2, -10.1]} nightFactor={nightFactor} />
       <TrashBin position={[-12.9, 0.2, -7.6]} />
@@ -342,6 +390,10 @@ function RoundaboutDistrict({
           </mesh>
         )
       })}
+
+      <YieldMark position={[14.5, 0.205, -14.5]} rotationY={Math.PI / 2} />
+      <YieldMark position={[21.5, 0.205, -22.0]} rotationY={0} />
+      <YieldMark position={[28.7, 0.205, -14.5]} rotationY={-Math.PI / 2} />
 
       <StreetLamp position={[13.4, 0.2, -21.7]} nightFactor={nightFactor} />
       <StreetLamp position={[29.5, 0.2, -21.7]} nightFactor={nightFactor} />
