@@ -408,6 +408,12 @@ function applyWorldPosition(group: THREE.Group, flowId: FlowId, progress: number
   }
 }
 
+function deterministicSpawnInterval(flowId: FlowId, sequence: number) {
+  const base = flowId === 'eastbound' || flowId === 'westbound' ? 3.7 : 4.1
+  const phase = (sequence * 1.618 + FLOW_ORDER.indexOf(flowId) * 0.73) % 1
+  return base + (phase - 0.5) * 1.25
+}
+
 function TrafficCars({
   signals,
   running,
@@ -435,6 +441,12 @@ function TrafficCars({
     northbound: 1.15,
     southbound: 1.7,
   })
+  const spawnSequences = useRef<Record<FlowId, number>>({
+    eastbound: 0,
+    westbound: 1,
+    northbound: 2,
+    southbound: 3,
+  })
 
   useFrame((_state, deltaRaw) => {
     const delta = Math.min(deltaRaw, 0.05)
@@ -461,7 +473,10 @@ function TrafficCars({
 
       const tail = flowCars.length ? flowCars[flowCars.length - 1] : null
       const spawnClear = !tail || tail.progress > def.spawn + 10.5
-      const interval = flowId === 'eastbound' || flowId === 'westbound' ? 3.8 : 4.2
+      const interval = deterministicSpawnInterval(
+        flowId,
+        spawnSequences.current[flowId],
+      )
       const belowFlowLimit = flowCars.length < maxCarsPerFlow
 
       const spawnPose = flowId === 'eastbound' || flowId === 'westbound'
@@ -469,6 +484,7 @@ function TrafficCars({
         : { position: def.toWorld(def.spawn), rotationY: def.rotationY }
       if (spawnClocks.current[flowId] >= interval && spawnClear && belowFlowLimit && vehicleSpawnClear(actors, spawnPose, 4.82, 1.9)) {
         spawnClocks.current[flowId] = 0
+        spawnSequences.current[flowId] += 1
         const id = idRef.current++
         const kind = KINDS[id % KINDS.length]
         const variant = VEHICLE_VARIANTS[id % VEHICLE_VARIANTS.length]
@@ -482,7 +498,7 @@ function TrafficCars({
           flow: flowId,
           progress: def.spawn,
           speed: 0,
-          desiredSpeed: 5.6 + (id % 4) * 0.42,
+          desiredSpeed: 5.15 + ((id * 7) % 6) * 0.28,
           length: model.length,
           braking: false,
           clearedStopLine: false,
