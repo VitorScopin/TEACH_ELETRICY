@@ -8,16 +8,46 @@ export type VehicleActor = { group: Group; length: number; width: number; order:
 export type VehicleRegistry = MutableRefObject<Map<string, VehicleActor>>
 
 export function vehicleBodiesOverlap(a: VehiclePose, length: number, width: number, b: VehiclePose, otherLength: number, otherWidth: number, margin = 0.25) {
+  return vehicleOverlapDepth(a, length, width, b, otherLength, otherWidth, margin) > 0
+}
+
+function vehicleOverlapDepth(
+  a: VehiclePose,
+  length: number,
+  width: number,
+  b: VehiclePose,
+  otherLength: number,
+  otherWidth: number,
+  margin = 0.25,
+) {
   const ax = Math.cos(a.rotationY), az = -Math.sin(a.rotationY)
   const bx = Math.cos(b.rotationY), bz = -Math.sin(b.rotationY)
   const dx = b.position[0] - a.position[0], dz = b.position[2] - a.position[2]
-  if (Math.hypot(dx, dz) > (length + otherLength) / 2 + width + otherWidth) return false
-  for (const [x, z] of [[ax, az], [-az, ax], [bx, bz], [-bz, bx]]) {
-    const radiusA = length / 2 * Math.abs(x * ax + z * az) + width / 2 * Math.abs(-x * az + z * ax)
-    const radiusB = otherLength / 2 * Math.abs(x * bx + z * bz) + otherWidth / 2 * Math.abs(-x * bz + z * bx)
-    if (Math.abs(dx * x + dz * z) >= radiusA + radiusB + margin) return false
+
+  if (
+    Math.hypot(dx, dz) >
+    (length + otherLength) / 2 + width + otherWidth + margin
+  ) {
+    return 0
   }
-  return true
+
+  let minimumPenetration = Number.POSITIVE_INFINITY
+
+  for (const [x, z] of [[ax, az], [-az, ax], [bx, bz], [-bz, bx]]) {
+    const radiusA =
+      length / 2 * Math.abs(x * ax + z * az) +
+      width / 2 * Math.abs(-x * az + z * ax)
+    const radiusB =
+      otherLength / 2 * Math.abs(x * bx + z * bz) +
+      otherWidth / 2 * Math.abs(-x * bz + z * bx)
+    const penetration =
+      radiusA + radiusB + margin - Math.abs(dx * x + dz * z)
+
+    if (penetration <= 0) return 0
+    minimumPenetration = Math.min(minimumPenetration, penetration)
+  }
+
+  return minimumPenetration
 }
 
 function actorActive(actor: VehicleActor) {
@@ -285,19 +315,62 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
 export function safeVehicleStep(registry: VehicleRegistry, id: string, requested: number, poseAtDistance: (distance: number) => VehiclePose) {
   const self = registry.current.get(id)
   if (!self || requested <= 0) return requested
-  const clear = (distance: number) => {
+
+  const blockersAt = (distance: number) => {
     const pose = poseAtDistance(distance)
+    const blockers: Array<{ actor: VehicleActor; depth: number }> = []
+
     for (const [otherId, other] of registry.current) {
-      if (otherId !== id && actorActive(other) && vehicleBodiesOverlap(pose, self.length, self.width, actorPose(other), other.length, other.width)) return false
+      if (otherId === id || !actorActive(other)) continue
+      const depth = vehicleOverlapDepth(
+        pose,
+        self.length,
+        self.width,
+        actorPose(other),
+        other.length,
+        other.width,
+      )
+      if (depth > 0) blockers.push({ actor: other, depth })
     }
-    return true
+
+    return blockers
   }
-  if (clear(requested)) return requested
-  if (!clear(0)) return 0
+
+  const requestedBlockers = blockersAt(requested)
+  if (!requestedBlockers.length) return requested
+
+  const currentBlockers = blockersAt(0)
+  if (currentBlockers.length) {
+    // Rare conflict recovery: only the deterministic priority vehicle may creep
+    // forward, and only when that tiny motion reduces every existing overlap
+    // without introducing a new one. This resolves gridlocks without letting a
+    // car push deeper through another vehicle.
+    const recoveryStep = Math.min(requested, 0.16)
+    const recoveryBlockers = blockersAt(recoveryStep)
+    const currentActors = new Set(currentBlockers.map(({ actor }) => actor))
+
+    const introducesNewConflict = recoveryBlockers.some(
+      ({ actor }) => !currentActors.has(actor),
+    )
+    const ownsPriority = currentBlockers.every(
+      ({ actor }) => self.order < actor.order,
+    )
+    const reducesEveryConflict = currentBlockers.every(({ actor, depth }) => {
+      const next = recoveryBlockers.find((item) => item.actor === actor)
+      return !next || next.depth < depth - 0.002
+    })
+
+    if (ownsPriority && !introducesNewConflict && reducesEveryConflict) {
+      return recoveryStep
+    }
+
+    return 0
+  }
+
   let low = 0, high = requested
   for (let i = 0; i < 8; i++) {
     const mid = (low + high) / 2
-    if (clear(mid)) low = mid
+    if (!blockersAt(mid).length) low = mid
     else high = mid
   }
   return low
