@@ -81,7 +81,7 @@ function roundaboutState(pose: VehiclePose) {
     // through the entry arc.
     committed:
       radius > ROUNDABOUT.islandRadius + 0.7 &&
-      radius < ROUNDABOUT.roadOuterRadius + 2.55,
+      radius < ROUNDABOUT.roadOuterRadius + 1.35,
     approaching:
       radius >= ROUNDABOUT.roadOuterRadius - 0.2 &&
       radius < ROUNDABOUT.roadOuterRadius + 13 &&
