@@ -341,6 +341,33 @@ for (let frame = 0; frame < 2400; frame++) {
     if (route.progress >= route.length - 0.001) { route.done = true; a.group.visible = false }
   }
 }
+if (!auditRoutes.every(route => route.done)) {
+  console.log('Traffic deadlock diagnostics:')
+  for (const route of auditRoutes.filter(route => !route.done)) {
+    const p = route.at(route.progress)
+    const dx = p.position[0] - ROUNDABOUT.center[0]
+    const dz = p.position[2] - ROUNDABOUT.center[1]
+    console.log(JSON.stringify({
+      id: route.id,
+      progress: Number(route.progress.toFixed(2)),
+      length: Number(route.length.toFixed(2)),
+      speed: Number(route.speed.toFixed(2)),
+      x: Number(p.position[0].toFixed(2)),
+      z: Number(p.position[2].toFixed(2)),
+      yaw: Number(p.rotationY.toFixed(3)),
+      radius: Number(Math.hypot(dx, dz).toFixed(2)),
+      order: audit.current.get(route.id).order,
+    }))
+  }
+  const blocked = auditRoutes.filter(route => !route.done)
+  for (let i = 0; i < blocked.length; i++) for (let j = i + 1; j < blocked.length; j++) {
+    const a = blocked[i], b = blocked[j]
+    const pa = a.at(a.progress), pb = b.at(b.progress)
+    console.log('pair', a.id, b.id, 'distance',
+      Math.hypot(pa.position[0] - pb.position[0], pa.position[2] - pb.position[2]).toFixed(2),
+      'overlap', vehicleBodiesOverlap(pa, 4.82, 1.9, pb, 4.82, 1.9))
+  }
+}
 assert(auditRoutes.every(route => route.done), `converging traffic must clear the circle: ${auditRoutes.filter(r => !r.done).map(r => r.id + ':' + r.progress.toFixed(1)).join(', ')}`)
 console.log('Two-minute converging traffic scenario completed without deadlock.')
 
