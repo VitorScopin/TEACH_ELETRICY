@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { BOULEVARD_START, CITY_ROADS, ROUNDABOUT, SUPERMARKET, type ParkingSpotDefinition, type CityRoadDefinition, type Vec2Point } from './cityLayout'
+import { BOULEVARD_START, CITY_ROADS, ROUNDABOUT, SUPERMARKET, SUPERMARKET_DRIVEWAYS, type ParkingSpotDefinition, type CityRoadDefinition, type Vec2Point } from './cityLayout'
 
 export function roadCurve(points: Vec2Point[], y = 0) {
   return new THREE.CatmullRomCurve3(points.map(([x, z]) => new THREE.Vector3(x, y, z)), false, 'catmullrom', 0.35)
@@ -73,16 +73,39 @@ export function roundaboutRoute(entry: RoundaboutLeg, exit: RoundaboutLeg) {
   return new THREE.CatmullRomCurve3(points, false, 'centripetal')
 }
 
+const MARKET_ACCESS_CURVE = roadCurve(CITY_ROADS.supermarketAccess.points)
+const MARKET_ENTRY_CURVE = roadCurve(SUPERMARKET_DRIVEWAYS.entry.points)
+const MARKET_EXIT_CURVE = roadCurve(SUPERMARKET_DRIVEWAYS.exit.points)
+
+function accessLanePoint(t: number, reverse = false) {
+  const point = MARKET_ACCESS_CURVE.getPoint(t)
+  const tangent = MARKET_ACCESS_CURVE.getTangent(t)
+  const offset = reverse ? -1.75 : 1.75
+  point.x -= tangent.z * offset
+  point.z += tangent.x * offset
+  return { point, tangent: reverse ? tangent.negate() : tangent }
+}
+
+function accessLanePoints(from: number, to: number, reverse = false) {
+  return Array.from({ length: 81 }, (_, i) => accessLanePoint(THREE.MathUtils.lerp(from, to, i / 80), reverse).point)
+}
+
 export function parkingApproachCurve(spot: ParkingSpotDefinition) {
-  const [sx] = spot.position
-  return new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-18, 0, -1.75),
-    new THREE.Vector3(SUPERMARKET.entryX + 4, 0, -1.75),
-    new THREE.Vector3(SUPERMARKET.entryX, 0, -6),
-    new THREE.Vector3(SUPERMARKET.entryX, 0, SUPERMARKET.aisleZ + 3),
-    new THREE.Vector3(SUPERMARKET.entryX + 2, 0, SUPERMARKET.aisleZ),
-    new THREE.Vector3(sx - 2.8, 0, SUPERMARKET.aisleZ),
-  ], false, 'catmullrom', 0.2)
+  const entryT = SUPERMARKET.accessEntryIndex / (CITY_ROADS.supermarketAccess.points.length - 1) - 0.07
+  const laneStart = accessLanePoint(0)
+  const mainTurn = new THREE.CubicBezierCurve3(
+    new THREE.Vector3(CITY_ROADS.supermarketAccess.points[0][0] - 5, 0, SUPERMARKET.approachSpawn[1]),
+    new THREE.Vector3(CITY_ROADS.supermarketAccess.points[0][0] + 1.75, 0, SUPERMARKET.approachSpawn[1]),
+    laneStart.point.clone().addScaledVector(laneStart.tangent, -3), laneStart.point,
+  )
+  const laneEnd = accessLanePoint(entryT)
+  const drivewayStart = MARKET_ENTRY_CURVE.getPoint(0.25)
+  const drivewayTangent = MARKET_ENTRY_CURVE.getTangent(0.25)
+  const turn = new THREE.CubicBezierCurve3(laneEnd.point, laneEnd.point.clone().addScaledVector(laneEnd.tangent, 2.5), drivewayStart.clone().addScaledVector(drivewayTangent, -2.5), drivewayStart)
+  const points = [new THREE.Vector3(...[SUPERMARKET.approachSpawn[0], 0, SUPERMARKET.approachSpawn[1]]), ...mainTurn.getPoints(30), ...accessLanePoints(0, entryT).slice(1), ...turn.getPoints(24).slice(1)]
+  for (let i = 1; i <= 48; i++) points.push(MARKET_ENTRY_CURVE.getPoint(THREE.MathUtils.lerp(0.25, 1, i / 48)))
+  points.push(new THREE.Vector3(spot.position[0] - 2.8, 0, SUPERMARKET.aisleZ))
+  return new THREE.CatmullRomCurve3(points, false, 'centripetal')
 }
 
 export function parkingAlignCurve(spot: ParkingSpotDefinition) {
@@ -96,14 +119,23 @@ export function parkingAlignCurve(spot: ParkingSpotDefinition) {
 }
 
 export function parkingExitCurve(spot: ParkingSpotDefinition) {
-  return new THREE.CatmullRomCurve3([
-    new THREE.Vector3(spot.position[0] - 2.8, 0, SUPERMARKET.aisleZ),
-    new THREE.Vector3(SUPERMARKET.exitX - 2, 0, SUPERMARKET.aisleZ),
-    new THREE.Vector3(SUPERMARKET.exitX, 0, SUPERMARKET.aisleZ + 3),
-    new THREE.Vector3(SUPERMARKET.exitX, 0, -6),
-    new THREE.Vector3(SUPERMARKET.exitX - 3, 0, -1.75),
-    new THREE.Vector3(-30, 0, -1.75),
-    new THREE.Vector3(-68, 0, -1.75),
-  ], false, 'catmullrom', 0.2)
+  const exitT = SUPERMARKET.accessExitIndex / (CITY_ROADS.supermarketAccess.points.length - 1)
+  const lane = accessLanePoint(exitT, true)
+  const drivewayEnd = MARKET_EXIT_CURVE.getPoint(0.65)
+  const tangent = MARKET_EXIT_CURVE.getTangent(0.65)
+  const turn = new THREE.CubicBezierCurve3(drivewayEnd, drivewayEnd.clone().addScaledVector(tangent, 2), lane.point.clone().addScaledVector(lane.tangent, -2), lane.point)
+  const points = [new THREE.Vector3(spot.position[0] - 2.8, 0, SUPERMARKET.aisleZ), new THREE.Vector3(SUPERMARKET.exitX - 3, 0, SUPERMARKET.aisleZ)]
+  for (let i = 0; i <= 48; i++) points.push(MARKET_EXIT_CURVE.getPoint(0.65 * i / 48))
+  points.push(...turn.getPoints(24).slice(1), ...accessLanePoints(exitT, 0, true).slice(1))
+  const end = accessLanePoint(0, true)
+  const rootX = CITY_ROADS.supermarketAccess.points[0][0]
+  const mainTurn = new THREE.CubicBezierCurve3(end.point, end.point.clone().addScaledVector(end.tangent, 3), new THREE.Vector3(rootX - 1.75, 0, -1.75), new THREE.Vector3(rootX - 5, 0, -1.75))
+  points.push(...mainTurn.getPoints(30).slice(1), new THREE.Vector3(SUPERMARKET.departureEnd[0], 0, SUPERMARKET.departureEnd[1]))
+  return new THREE.CatmullRomCurve3(points, false, 'centripetal')
 }
 
+export function supermarketPedestrianHeight(z: number) {
+  const { rampStartZ, rampEndZ } = SUPERMARKET.crossing
+  const t = THREE.MathUtils.clamp((z - rampStartZ) / (rampEndZ - rampStartZ), 0, 1)
+  return THREE.MathUtils.lerp(0.055, SUPERMARKET.frontWalk.center[1] + SUPERMARKET.frontWalk.size[1] / 2 + 0.005, t)
+}

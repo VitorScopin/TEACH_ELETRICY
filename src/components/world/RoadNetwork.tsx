@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { CITY_ROADS, MAIN_ROADS, DISTRICTS, PEDESTRIAN_PATHS, type CityRoadDefinition, type Vec2Point } from './cityLayout'
+import { CITY_ROADS, MAIN_ROADS, DISTRICTS, SUPERMARKET_DRIVEWAYS, type CityRoadDefinition, type Vec2Point } from './cityLayout'
 import { roadCurve as curveFrom, roadPose, roadWidthAt } from './roadGeometry'
 import { StreetLamp, Tree } from './StreetFurniture'
 
@@ -144,16 +144,22 @@ function MarkingRibbon({
 }
 
 function RoadMarkings({ road }: { road: CityRoadDefinition }) {
-  const center = useMemo(() => offsetPath(road, 0), [road])
-  const edges = useMemo(() => [-0.485, 0.485].map(f => offsetPath(road, f)), [road])
-  const dividers = useMemo(() => [-0.25, 0.25].map(f => offsetPath(road, f).slice(0, 85)), [road])
+  const paths = useMemo(() => {
+    const inset = Math.ceil((road.markingInset ?? 0) / curveFrom(road.points).getLength() * 160)
+    const trim = (points: Vec2Point[]) => inset ? points.slice(inset, points.length - inset) : points
+    return {
+      center: trim(offsetPath(road, 0)),
+      edges: [-0.485, 0.485].map(f => trim(offsetPath(road, f))),
+      dividers: [-0.25, 0.25].map(f => trim(offsetPath(road, f)).slice(0, 85)),
+    }
+  }, [road])
   return (
     <>
-      <MarkingRibbon points={center} width={0.12} color="#e4bf3d" />
-      {edges.map((points, index) => (
+      <MarkingRibbon points={paths.center} width={0.12} color="#e4bf3d" />
+      {paths.edges.map((points, index) => (
         <MarkingRibbon key={index} points={points} width={0.10} />
       ))}
-      {road.width > 10 && dividers.map((points, index) => (
+      {road.width > 10 && paths.dividers.map((points, index) => (
         <MarkingRibbon key={index} points={points} dashed />
       ))}
     </>
@@ -307,10 +313,6 @@ function CivicGarden({ nightFactor }: { nightFactor: number }) {
 }
 
 const BOULEVARD_MEDIAN = offsetPath(CITY_ROADS.eastBoulevard, 0).slice(25, 85)
-const MARKET_FOOTPATHS: CityRoadDefinition[] = PEDESTRIAN_PATHS[0].map((point, i, points) => ({
-  id: `market-footpath-${i}`, points: [point, points[(i + 1) % points.length]], width: 1.4,
-}))
-
 export function UrbanRoadNetwork({
   rain,
   nightFactor,
@@ -330,6 +332,9 @@ export function UrbanRoadNetwork({
   return (
     <>
       {MAIN_ROADS.map((road) => <RoadRibbon key={road.id} road={road} surface={false} />)}
+      <RoadRibbon road={CITY_ROADS.supermarketAccess} rain={rain} />
+      <RoadMarkings road={CITY_ROADS.supermarketAccess} />
+      {Object.values(SUPERMARKET_DRIVEWAYS).map(road => <RoadRibbon key={road.id} road={road} rain={rain} />)}
       <RoadRibbon road={boulevard} rain={rain} />
       <RoadMarkings road={boulevard} />
 
@@ -343,9 +348,6 @@ export function UrbanRoadNetwork({
       <RoadMarkings road={parkRoad} />
       {quality !== 'low' && <>
         <CivicGarden nightFactor={nightFactor} />
-        {MARKET_FOOTPATHS.map((road) => (
-          <RoadRibbon key={road.id} road={road} color="#9ca3a0" />
-        ))}
       </>}
 
       {/* Three real continuations after the roundabout. */}
