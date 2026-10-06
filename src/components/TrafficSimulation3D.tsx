@@ -9,6 +9,7 @@ import {
 } from '../simulation/trafficWorld'
 import type { IntersectionTrafficState, SignalId, TrafficState } from '../types'
 import { CityDistricts, RoundaboutDistrict } from './world/CityDistricts'
+import { SupermarketDistrict } from './world/SupermarketDistrict'
 import { CityLife } from './world/CityLife'
 import { BOULEVARD_START, CITY_LIMITS } from './world/cityLayout'
 import { horizontalRoadPose, HORIZONTAL_ROAD_EXIT } from './world/roadGeometry'
@@ -217,7 +218,7 @@ function UrbanProps({
   ]
   const lamps: Array<[number, number, number]> = [
     [-12.4, 0.04, -8.8], [12.6, 0.04, -8.8], [-12.5, 0.04, 8.9], [12.5, 0.04, 8.9],
-    [-24, 0.04, -8.8], [-24, 0.04, 8.9], [-36, 0.04, 8.9],
+    [-27, 0.04, -7.75], [-24, 0.04, 8.9], [-36, 0.04, 8.9],
   ]
 
   return (
@@ -391,6 +392,7 @@ function RoadScene({
         <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} />
       </mesh>
 
+      <SupermarketDistrict quality={quality} rain={rain} nightFactor={nightFactor} />
       <RoundaboutDistrict rain={rain} nightFactor={nightFactor} />
       <UrbanRoadNetwork quality={quality} rain={rain} nightFactor={nightFactor} />
       {quality !== 'low' && (

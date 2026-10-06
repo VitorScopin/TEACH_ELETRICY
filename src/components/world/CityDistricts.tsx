@@ -1,7 +1,7 @@
 import { useGLTF } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import * as THREE from 'three'
-import { ROUNDABOUT, SUPERMARKET, DISTRICTS, CITY_FRAME_BUILDINGS, SUPERMARKET_PARKING_SPOTS } from './cityLayout'
+import { ROUNDABOUT, DISTRICTS, CITY_FRAME_BUILDINGS } from './cityLayout'
 import { Bench, BusStop, Planter, StreetLamp, TrashBin, Tree } from './StreetFurniture'
 
 type Quality = 'low' | 'medium' | 'high'
@@ -103,191 +103,6 @@ function CityBlockPad({
         <planeGeometry args={[size[0] - 0.5, size[1] - 0.5]} />
         <meshBasicMaterial color="#858b8b" transparent opacity={0.14} />
       </mesh>
-    </group>
-  )
-}
-
-function GroundArrow({
-  position,
-  rotationY = 0,
-  scale = 1,
-}: {
-  position: [number, number, number]
-  rotationY?: number
-  scale?: number
-}) {
-  return (
-    <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
-      <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.18, 1.7]} />
-        <meshBasicMaterial color="#e8e7de" toneMapped={false} />
-      </mesh>
-      <mesh position={[-0.28, 0.012, 0.56]} rotation={[-Math.PI / 2, 0, -Math.PI / 4]}>
-        <planeGeometry args={[0.16, 0.78]} />
-        <meshBasicMaterial color="#e8e7de" toneMapped={false} />
-      </mesh>
-      <mesh position={[0.28, 0.012, 0.56]} rotation={[-Math.PI / 2, 0, Math.PI / 4]}>
-        <planeGeometry args={[0.16, 0.78]} />
-        <meshBasicMaterial color="#e8e7de" toneMapped={false} />
-      </mesh>
-    </group>
-  )
-}
-
-function WetOverlay({
-  position,
-  size,
-  rain,
-}: {
-  position: [number, number, number]
-  size: [number, number]
-  rain: number
-}) {
-  if (rain <= 0.02) return null
-
-  return (
-    <mesh position={position} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={size} />
-      <meshStandardMaterial
-        color="#142027"
-        transparent
-        opacity={Math.min(0.38, rain * 0.34)}
-        roughness={Math.max(0.16, 0.48 - rain * 0.3)}
-        metalness={Math.min(0.28, rain * 0.24)}
-      />
-    </mesh>
-  )
-}
-
-function SupermarketBuilding({ nightFactor }: { nightFactor: number }) {
-  const sign = useSignTexture('SUPERMERCADO', '#ef3d36')
-
-  return (
-    <group position={SUPERMARKET.position}>
-      <mesh position={[0, 2.25, 0]}>
-        <boxGeometry args={[18.5, 4.5, 6.2]} />
-        <meshStandardMaterial color="#d8d8d3" roughness={0.72} />
-      </mesh>
-
-      <mesh position={[0, 2.55, 3.13]}>
-        <planeGeometry args={[12.8, 3.0]} />
-        <meshStandardMaterial
-          color="#8ec6d3"
-          emissive="#3b9bb1"
-          emissiveIntensity={0.18 + nightFactor * 1.1}
-          roughness={0.22}
-          metalness={0.08}
-        />
-      </mesh>
-
-      <mesh position={[0, 4.25, 3.18]}>
-        <planeGeometry args={[14.5, 2.2]} />
-        <meshBasicMaterial map={sign ?? undefined} color={sign ? '#ffffff' : '#ef3d36'} toneMapped={false} />
-      </mesh>
-
-      <mesh position={[0, 4.62, 0]}>
-        <boxGeometry args={[19.2, 0.3, 6.8]} />
-        <meshStandardMaterial color="#30383d" roughness={0.82} />
-      </mesh>
-
-      {[-6.8, -2.2, 2.2, 6.8].map((x) => (
-        <mesh key={x} position={[x, 4.95, -1.1]}>
-          <boxGeometry args={[1.4, 0.42, 1.5]} />
-          <meshStandardMaterial color="#555d61" roughness={0.8} />
-        </mesh>
-      ))}
-
-      {[-4.4, 0, 4.4].map((x) => (
-        <mesh key={x} position={[x, 1.35, 3.2]}>
-          <boxGeometry args={[2.7, 2.25, 0.18]} />
-          <meshStandardMaterial
-            color="#bfe6f1"
-            emissive="#58a7bd"
-            emissiveIntensity={0.25 + nightFactor * 1.25}
-            roughness={0.18}
-          />
-        </mesh>
-      ))}
-
-      <group position={[8.8, 0, 4.4]}>
-        <mesh position={[0, 2.5, 0]}>
-          <boxGeometry args={[0.18, 5.0, 0.18]} />
-          <meshStandardMaterial color="#424c51" metalness={0.55} roughness={0.4} />
-        </mesh>
-        <mesh position={[0, 4.8, 0]}>
-          <boxGeometry args={[3.0, 2.1, 0.22]} />
-          <meshBasicMaterial map={sign ?? undefined} color="#ffffff" toneMapped={false} />
-        </mesh>
-      </group>
-    </group>
-  )
-}
-
-function ParkingSpace({
-  position,
-  rotationY,
-  accessible = false,
-}: {
-  position: [number, number, number]
-  rotationY: number
-  accessible?: boolean
-}) {
-  return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[5.0, 2.65]} />
-        <meshBasicMaterial color={accessible ? '#255e84' : '#32383b'} toneMapped={false} />
-      </mesh>
-      {[-1.28, 1.28].map((x) => (
-        <mesh key={x} position={[0, 0.012, x]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[5.0, 0.06]} />
-          <meshBasicMaterial color="#e7e2c7" toneMapped={false} />
-        </mesh>
-      ))}
-      <mesh position={[2.46, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.06, 2.6]} />
-        <meshBasicMaterial color="#e7e2c7" toneMapped={false} />
-      </mesh>
-    </group>
-  )
-}
-
-function SupermarketParking({
-  rain,
-  nightFactor,
-}: {
-  rain: number
-  nightFactor: number
-}) {
-  return (
-    <group>
-      <mesh position={SUPERMARKET.parkingCenter} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={SUPERMARKET.parkingSize} />
-        <meshStandardMaterial color="#31383b" roughness={0.9} />
-      </mesh>
-      <WetOverlay position={[SUPERMARKET.parkingCenter[0], 0.035, SUPERMARKET.parkingCenter[2]]} size={SUPERMARKET.parkingSize} rain={rain} />
-
-      {SUPERMARKET_PARKING_SPOTS.map((spot) => (
-        <ParkingSpace
-          key={spot.id}
-          position={spot.position}
-          rotationY={spot.rotationY}
-          accessible={spot.accessible}
-        />
-      ))}
-
-      {[SUPERMARKET.entryX, SUPERMARKET.exitX].map((x) => (
-        <mesh key={x} position={[x, 0.034, -10]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[SUPERMARKET.drivewayWidth, 19]} />
-          <meshStandardMaterial color="#31383b" roughness={0.9} />
-        </mesh>
-      ))}
-      <GroundArrow position={[-26, 0.04, SUPERMARKET.aisleZ]} rotationY={-Math.PI / 2} scale={0.75} />
-      <GroundArrow position={[SUPERMARKET.entryX, 0.04, -10]} rotationY={Math.PI} scale={0.72} />
-      <GroundArrow position={[SUPERMARKET.exitX, 0.04, -10]} scale={0.72} />
-      <StreetLamp position={[-37, 0.04, -20]} nightFactor={nightFactor} />
-      <StreetLamp position={[-10, 0.04, -20]} nightFactor={nightFactor} />
-      <TrashBin position={[-12.9, 0.2, -7.6]} />
     </group>
   )
 }
@@ -468,8 +283,6 @@ export function CityDistricts({
     <>
       <CityBlockPad position={[21.0, 0, 15.0]} size={[25.0, 16.0]} tone="#656b6b" />
 
-      <SupermarketBuilding nightFactor={nightFactor} />
-      <SupermarketParking rain={rain} nightFactor={nightFactor} />
       <CommercialStrip nightFactor={nightFactor} />
       {quality === 'high' && <>
         <mesh position={[33, 0.028, 8.8]} rotation={[-Math.PI / 2, 0, 0]}>
