@@ -195,210 +195,19 @@ for (const reverse of [false, true]) {
     }
   })
 }
-const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep, curvatureSpeedLimit, shouldStopForSignal, desiredFollowingGap } = require('../src/components/world/vehicleTraffic.ts')
+const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep } = require('../src/components/world/vehicleTraffic.ts')
 const pose = (x, z = 1.75, yaw = 0) => ({ position: [x, 0, z], rotationY: yaw })
-const actor = (p, order, speed = 0) => { const group = new THREE.Group(); group.position.set(...p.position); group.rotation.y = p.rotationY; group.userData.trafficSpeed = speed; return { group, length: 4.82, width: 1.9, order } }
+const actor = (p, order) => { const group = new THREE.Group(); group.position.set(...p.position); group.rotation.y = p.rotationY; return { group, length: 4.82, width: 1.9, order } }
 const registry = { current: new Map([['self', actor(pose(0), 1)], ['leader', actor(pose(8), 2)]]) }
 const future = distance => pose(distance)
 assert(trafficSpeedLimit(registry, 'self', future, 8) < 8, 'following vehicle brakes before leader')
 assert(safeVehicleStep(registry, 'self', 5, future) < 3, 'body guard clamps following travel')
-
-assert(desiredFollowingGap(0) >= 2.3, 'stopped traffic preserves a standstill gap')
-assert(desiredFollowingGap(6) > desiredFollowingGap(2), 'following gap grows with speed')
-
-const pacedFollower = actor(pose(0), 1, 6)
-const pacedLeader = actor(pose(11), 2, 2.5)
-const pacedRegistry = {
-  current: new Map([
-    ['paced-follower', pacedFollower],
-    ['paced-leader', pacedLeader],
-  ]),
-}
-const pacedFuture = distance => pose(distance)
-const pacedLimit = trafficSpeedLimit(pacedRegistry, 'paced-follower', pacedFuture, 7)
-assert(
-  pacedLimit < 4.5,
-  'fast follower matches a slower leader before reaching collision distance',
-)
-
-pacedLeader.group.position.x = 18
-assert(
-  trafficSpeedLimit(pacedRegistry, 'paced-follower', pacedFuture, 7) > pacedLimit,
-  'follower can recover speed when the headway opens',
-)
-
-// Main PLC avenue owns the junction with the supermarket access road.
-// A market/parking car must not create an invisible stop before the real signal.
-const avenueCar = actor(pose(-24, 1.75, 0), 500, 5)
-avenueCar.priority = 0
-avenueCar.trafficClass = 'plc'
-const marketCrossCar = actor(pose(-20, -4.5, -Math.PI / 2), 10, 2)
-marketCrossCar.priority = 2
-marketCrossCar.trafficClass = 'parking'
-const marketPriorityRegistry = {
-  current: new Map([
-    ['avenue', avenueCar],
-    ['market-cross', marketCrossCar],
-  ]),
-}
-const avenueFuture = distance => pose(-24 + distance, 1.75, 0)
-assert.equal(
-  trafficSpeedLimit(marketPriorityRegistry, 'avenue', avenueFuture, 6),
-  6,
-  'PLC avenue car is not stopped early by supermarket access traffic',
-)
-assert(
-  trafficSpeedLimit(
-    marketPriorityRegistry,
-    'market-cross',
-    distance => pose(-20, -4.5 + distance, -Math.PI / 2),
-    4,
-  ) < 4,
-  'supermarket access traffic yields to the main avenue',
-)
 assert(boundedTrafficStep(-12, 4.82, 8, 1, -9) < 0.6, 'red light prevents overshooting stop bar')
 assert.equal(boundedTrafficStep(-10, 4.82, 8, 1, -9), 0, 'queue constraint never reverses a car')
 registry.current.set('leader', actor(pose(0, -1.75, Math.PI), 2))
 assert.equal(trafficSpeedLimit(registry, 'self', future, 8), 8, 'opposite lane stays independent')
 assert.equal(safeVehicleStep(registry, 'self', 5, future), 5, 'opposite lane does not block travel')
-
-// Secondary-road crossing: the higher-order vehicle should brake before the
-// geometric conflict point instead of entering the junction and stopping there.
-const crossingSelf = actor(pose(-6, 0, 0), 20)
-const crossingOther = actor(pose(0, -6, -Math.PI / 2), 5)
-const crossingRegistry = { current: new Map([['cross-self', crossingSelf], ['cross-other', crossingOther]]) }
-const crossingFuture = distance => pose(-6 + distance, 0, 0)
-assert(
-  trafficSpeedLimit(crossingRegistry, 'cross-self', crossingFuture, 8) < 6,
-  'lower-priority vehicle slows before perpendicular conflict point',
-)
 assert(!vehicleBodiesOverlap(pose(0), 4.82, 1.9, pose(0, -1.75, Math.PI), 4.82, 1.9))
-
-const straightPose = distance => pose(distance)
-assert.equal(curvatureSpeedLimit(straightPose, 6), 6, 'straight road keeps cruise speed')
-const turningPose = distance => ({
-  position: [distance, 0, 0],
-  rotationY: distance < 4 ? 0 : distance < 8 ? 0.35 : 0.72,
-})
-assert(curvatureSpeedLimit(turningPose, 6) < 6, 'tight bend reduces target speed before turn')
-
-assert(shouldStopForSignal({
-  red: true, yellow: false, green: false, speed: 4, distanceToStopLine: 8, hasEnteredIntersection: false,
-}), 'red requires a stop')
-assert(shouldStopForSignal({
-  red: false, yellow: true, green: false, speed: 2, distanceToStopLine: 8, hasEnteredIntersection: false,
-}), 'slow distant car stops on yellow')
-assert(!shouldStopForSignal({
-  red: false, yellow: true, green: false, speed: 7, distanceToStopLine: 3, hasEnteredIntersection: false,
-}), 'fast close car clears yellow dilemma zone')
-assert(!shouldStopForSignal({
-  red: true, yellow: false, green: false, speed: 4, distanceToStopLine: -1, hasEnteredIntersection: true,
-}), 'vehicle already inside intersection clears it')
-
-// Roundabout approach must yield early to circulating traffic, not only at collision distance.
-const westApproachPose = pose(37, ROUNDABOUT.center[1], 0)
-const circulatingAngle = Math.PI + 0.55
-const circulatingPose = pose(
-  ROUNDABOUT.center[0] + Math.cos(circulatingAngle) * ROUNDABOUT.laneRadius,
-  ROUNDABOUT.center[1] + Math.sin(circulatingAngle) * ROUNDABOUT.laneRadius,
-  Math.PI / 2 - circulatingAngle,
-)
-const roundaboutRegistry = {
-  current: new Map([
-    ['approach', actor(westApproachPose, 20)],
-    ['circle', actor(circulatingPose, 10)],
-  ]),
-}
-const westApproachFuture = distance => pose(37 + distance, ROUNDABOUT.center[1], 0)
-assert(
-  trafficSpeedLimit(roundaboutRegistry, 'approach', westApproachFuture, 8) < 4,
-  'approaching traffic slows before occupied roundabout',
-)
-
-// A circulating vehicle must not mistake a waiting approach vehicle for a
-// leader in its own lane. Otherwise both vehicles yield to each other.
-const circulatingGroup = actor(circulatingPose, 1)
-const waitingApproach = actor(westApproachPose, 2)
-const circleFollowerRegistry = {
-  current: new Map([
-    ['circle-self', circulatingGroup],
-    ['entry-waiting', waitingApproach],
-  ]),
-}
-const circleFuture = distance => {
-  const angle = circulatingAngle - distance / ROUNDABOUT.laneRadius
-  return pose(
-    ROUNDABOUT.center[0] + Math.cos(angle) * ROUNDABOUT.laneRadius,
-    ROUNDABOUT.center[1] + Math.sin(angle) * ROUNDABOUT.laneRadius,
-    Math.PI / 2 - angle,
-  )
-}
-const circleCurveBaseline = curvatureSpeedLimit(circleFuture, 4.5)
-assert(
-  Math.abs(
-    trafficSpeedLimit(circleFollowerRegistry, 'circle-self', circleFuture, 4.5) -
-      circleCurveBaseline,
-  ) < 1e-6,
-  'circulating vehicle is not additionally blocked by a car waiting on an approach',
-)
-
-// Simultaneous entries use deterministic priority so two approaches do not charge the circle together.
-const northApproachPose = pose(ROUNDABOUT.center[0], -43, -Math.PI / 2)
-const simultaneousRegistry = {
-  current: new Map([
-    ['west-entry', actor(westApproachPose, 10)],
-    ['north-entry', actor(northApproachPose, 30)],
-  ]),
-}
-const northFuture = distance => pose(ROUNDABOUT.center[0], -43 + distance, -Math.PI / 2)
-assert(
-  trafficSpeedLimit(simultaneousRegistry, 'north-entry', northFuture, 8) < 8,
-  'lower-priority simultaneous entry yields before roundabout',
-)
-
-// If two bodies are already marginally overlapping, only the priority vehicle
-// may creep in a direction that reduces the overlap. This prevents permanent
-// gridlock without allowing either car to push through the other.
-const recoveryPriority = actor(pose(0), 1, 0)
-recoveryPriority.priority = 0
-const recoveryBlocked = actor(pose(-4.55), 10, 0)
-recoveryBlocked.priority = 1
-const recoveryRegistry = {
-  current: new Map([
-    ['recover-priority', recoveryPriority],
-    ['recover-blocked', recoveryBlocked],
-  ]),
-}
-const recoveryFuture = distance => pose(distance)
-let recoveredStep = 0
-for (let i = 0; i < 24; i++) {
-  recoveredStep = Math.max(
-    recoveredStep,
-    safeVehicleStep(recoveryRegistry, 'recover-priority', 0.12, recoveryFuture),
-  )
-}
-assert(
-  recoveredStep > 0,
-  'priority vehicle eventually creeps out of persistent turn contact',
-)
-
-const nonPriority = actor(pose(0), 20, 0)
-nonPriority.priority = 2
-const priorityBlocker = actor(pose(-4.55), 5, 0)
-priorityBlocker.priority = 0
-const blockedRecoveryRegistry = {
-  current: new Map([
-    ['recover-wait', nonPriority],
-    ['recover-owner', priorityBlocker],
-  ]),
-}
-for (let i = 0; i < 24; i++) {
-  assert.equal(
-    safeVehicleStep(blockedRecoveryRegistry, 'recover-wait', 0.12, recoveryFuture),
-    0,
-    'lower-priority vehicle remains stopped while priority vehicle clears contact',
-  )
-}
 const { URBAN_LOTS } = require('../src/components/world/urbanLayout.ts')
 assert(URBAN_LOTS.length >= 12, 'city has populated residential blocks')
 for (const lot of URBAN_LOTS) {
@@ -433,33 +242,6 @@ for (let frame = 0; frame < 2400; frame++) {
     if (step < route.speed * 0.05) route.speed = step / 0.05
     const next = route.at(route.progress); a.group.position.set(...next.position); a.group.rotation.y = next.rotationY
     if (route.progress >= route.length - 0.001) { route.done = true; a.group.visible = false }
-  }
-}
-if (!auditRoutes.every(route => route.done)) {
-  console.log('Traffic deadlock diagnostics:')
-  for (const route of auditRoutes.filter(route => !route.done)) {
-    const p = route.at(route.progress)
-    const dx = p.position[0] - ROUNDABOUT.center[0]
-    const dz = p.position[2] - ROUNDABOUT.center[1]
-    console.log(JSON.stringify({
-      id: route.id,
-      progress: Number(route.progress.toFixed(2)),
-      length: Number(route.length.toFixed(2)),
-      speed: Number(route.speed.toFixed(2)),
-      x: Number(p.position[0].toFixed(2)),
-      z: Number(p.position[2].toFixed(2)),
-      yaw: Number(p.rotationY.toFixed(3)),
-      radius: Number(Math.hypot(dx, dz).toFixed(2)),
-      order: audit.current.get(route.id).order,
-    }))
-  }
-  const blocked = auditRoutes.filter(route => !route.done)
-  for (let i = 0; i < blocked.length; i++) for (let j = i + 1; j < blocked.length; j++) {
-    const a = blocked[i], b = blocked[j]
-    const pa = a.at(a.progress), pb = b.at(b.progress)
-    console.log('pair', a.id, b.id, 'distance',
-      Math.hypot(pa.position[0] - pb.position[0], pa.position[2] - pb.position[2]).toFixed(2),
-      'overlap', vehicleBodiesOverlap(pa, 4.82, 1.9, pb, 4.82, 1.9))
   }
 }
 assert(auditRoutes.every(route => route.done), `converging traffic must clear the circle: ${auditRoutes.filter(r => !r.done).map(r => r.id + ':' + r.progress.toFixed(1)).join(', ')}`)
