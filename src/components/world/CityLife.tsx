@@ -115,21 +115,31 @@ function ParkingCarAgent({
   const motionSpeed = useRef(0)
   const elapsed = useRef(0)
   const spotRef = useRef<ParkingSpotDefinition | null>(null)
+  const parkingVisit = useRef(0)
   const approachRef = useRef<THREE.CatmullRomCurve3 | null>(null)
   const alignRef = useRef<THREE.CatmullRomCurve3 | null>(null)
   const exitRef = useRef<THREE.CatmullRomCurve3 | null>(null)
 
   const reserveSpot = () => {
-    const free = SUPERMARKET_PARKING_SPOTS.find(
+    const free = SUPERMARKET_PARKING_SPOTS.filter(
       (spot) => !spot.accessible && !occupancy.current.has(spot.id),
     )
-    if (!free) return null
-    occupancy.current.set(free.id, id)
-    spotRef.current = free
-    approachRef.current = parkingApproachCurve(free)
-    alignRef.current = parkingAlignCurve(free)
-    exitRef.current = parkingExitCurve(free)
-    return free
+    if (!free.length) return null
+
+    const idSeed = Array.from(id).reduce(
+      (sum, char) => sum + char.charCodeAt(0),
+      0,
+    )
+    const freeIndex = (idSeed + parkingVisit.current * 3) % free.length
+    const selected = free[freeIndex]
+    parkingVisit.current += 1
+
+    occupancy.current.set(selected.id, id)
+    spotRef.current = selected
+    approachRef.current = parkingApproachCurve(selected)
+    alignRef.current = parkingAlignCurve(selected)
+    exitRef.current = parkingExitCurve(selected)
+    return selected
   }
 
   const resetAgent = () => {
