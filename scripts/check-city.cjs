@@ -279,9 +279,13 @@ const circleFuture = distance => {
     Math.PI / 2 - angle,
   )
 }
+const circleCurveBaseline = curvatureSpeedLimit(circleFuture, 4.5)
 assert(
-  trafficSpeedLimit(circleFollowerRegistry, 'circle-self', circleFuture, 4.5) > 3.2,
-  'circulating vehicle is not blocked by a car waiting on an approach',
+  Math.abs(
+    trafficSpeedLimit(circleFollowerRegistry, 'circle-self', circleFuture, 4.5) -
+      circleCurveBaseline,
+  ) < 1e-6,
+  'circulating vehicle is not additionally blocked by a car waiting on an approach',
 )
 
 // Simultaneous entries use deterministic priority so two approaches do not charge the circle together.
