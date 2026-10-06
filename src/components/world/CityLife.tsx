@@ -1,16 +1,17 @@
 import { useFrame } from '@react-three/fiber'
-import { Suspense, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import {
   RealisticCarModel,
   type VehicleVariant,
 } from './VehicleModel'
 import {
-  CITY_ROADS,
-  ROUNDABOUT,
   SUPERMARKET_PARKING_SPOTS,
+  PEDESTRIAN_PATHS,
   type ParkingSpotDefinition,
 } from './cityLayout'
+
+import { parkingApproachCurve, parkingAlignCurve, parkingExitCurve, roundaboutRoute, type RoundaboutLeg } from './roadGeometry'
 
 type Quality = 'low' | 'medium' | 'high'
 
@@ -42,7 +43,7 @@ function applyCurveTransform(
   group: THREE.Group,
   curve: THREE.CatmullRomCurve3,
   t: number,
-  y = 0.24,
+  y = 0.06,
 ) {
   const clamped = THREE.MathUtils.clamp(t, 0, 1)
   const point = curve.getPointAt(clamped)
@@ -51,62 +52,9 @@ function applyCurveTransform(
   group.rotation.y = -Math.atan2(tangent.z, tangent.x)
 }
 
-function parkingApproachCurve(spot: ParkingSpotDefinition) {
-  const [sx, , sz] = spot.position
-  const aisleZ = sz > -12 ? -8.25 : -15.1
-  return new THREE.CatmullRomCurve3(
-    [
-      new THREE.Vector3(-38, 0, -1.75),
-      new THREE.Vector3(-33.0, 0, -1.75),
-      new THREE.Vector3(-30.8, 0, -4.2),
-      new THREE.Vector3(-30.8, 0, aisleZ),
-      new THREE.Vector3(sx - 5.0, 0, aisleZ),
-      new THREE.Vector3(sx - 2.8, 0, aisleZ),
-    ],
-    false,
-    'catmullrom',
-    0.35,
-  )
-}
-
-function parkingAlignCurve(spot: ParkingSpotDefinition) {
-  const [sx, , sz] = spot.position
-  const aisleZ = sz > -12 ? -8.25 : -15.1
-  return new THREE.CatmullRomCurve3(
-    [
-      new THREE.Vector3(sx - 2.8, 0, aisleZ),
-      new THREE.Vector3(sx - 1.2, 0, aisleZ),
-      new THREE.Vector3(sx - 0.45, 0, THREE.MathUtils.lerp(aisleZ, sz, 0.58)),
-      new THREE.Vector3(sx, 0, sz),
-    ],
-    false,
-    'catmullrom',
-    0.32,
-  )
-}
-
-function parkingExitCurve(spot: ParkingSpotDefinition) {
-  const [sx, , sz] = spot.position
-  const aisleZ = sz > -12 ? -8.25 : -15.1
-  return new THREE.CatmullRomCurve3(
-    [
-      new THREE.Vector3(sx, 0, sz),
-      new THREE.Vector3(sx - 0.7, 0, THREE.MathUtils.lerp(sz, aisleZ, 0.52)),
-      new THREE.Vector3(sx - 2.8, 0, aisleZ),
-      new THREE.Vector3(-30.7, 0, aisleZ),
-      new THREE.Vector3(-30.7, 0, 1.75),
-      new THREE.Vector3(-19, 0, 1.75),
-      new THREE.Vector3(2, 0, 1.75),
-      new THREE.Vector3(38, 0, 1.75),
-    ],
-    false,
-    'catmullrom',
-    0.35,
-  )
-}
-
 function StaticParkedCars({ quality }: { quality: Exclude<Quality, 'low'> }) {
-  const visible = quality === 'high' ? STATIC_CARS : STATIC_CARS.slice(0, 3)
+  const visible = STATIC_CARS
+  const scale = quality === 'high' ? 0.93 : 0.9
 
   return (
     <>
@@ -118,7 +66,7 @@ function StaticParkedCars({ quality }: { quality: Exclude<Quality, 'low'> }) {
             key={car.spotId}
             position={spot.position}
             rotation={[0, spot.rotationY, 0]}
-            scale={0.93}
+            scale={scale}
           >
             <Suspense fallback={null}>
               <RealisticCarModel variant={car.variant} color={car.color} />
@@ -186,6 +134,11 @@ function ParkingCarAgent({
     if (ref.current) ref.current.visible = false
   }
 
+  useEffect(() => () => {
+    const spot = spotRef.current
+    if (spot && occupancy.current.get(spot.id) === id) occupancy.current.delete(spot.id)
+  }, [id, occupancy])
+
   useFrame((_frame, deltaRaw) => {
     const group = ref.current
     if (!running || !group) return
@@ -211,6 +164,7 @@ function ParkingCarAgent({
 
     switch (state.current) {
       case 'driving':
+        if (approachRef.current) applyCurveTransform(group, approachRef.current, 0)
         state.current = 'entering-parking'
         stateProgress.current = 0
         break
@@ -250,7 +204,7 @@ function ParkingCarAgent({
         stateProgress.current += delta / 2.8
         applyCurveTransform(group, curve, stateProgress.current)
         if (stateProgress.current >= 1) {
-          group.position.set(spot.position[0], 0.24, spot.position[2])
+          group.position.set(spot.position[0], 0.04, spot.position[2])
           group.rotation.y = spot.rotationY
           state.current = 'parked'
           parkedTimer.current = 0
@@ -260,7 +214,7 @@ function ParkingCarAgent({
 
       case 'parked':
         parkedTimer.current += delta
-        group.position.set(spot.position[0], 0.24, spot.position[2])
+        group.position.set(spot.position[0], 0.04, spot.position[2])
         group.rotation.y = spot.rotationY
         if (parkedTimer.current >= dwellSeconds) {
           state.current = 'leaving-space'
@@ -269,13 +223,13 @@ function ParkingCarAgent({
         break
 
       case 'leaving-space': {
-        const curve = exitRef.current
+        const curve = alignRef.current
         if (!curve) return
         stateProgress.current += delta / 2.6
-        applyCurveTransform(group, curve, Math.min(stateProgress.current * 0.28, 0.28))
+        applyCurveTransform(group, curve, 1 - stateProgress.current)
         if (stateProgress.current >= 1) {
           state.current = 'leaving-parking'
-          stateProgress.current = 0.28
+          stateProgress.current = 0
         }
         break
       }
@@ -298,83 +252,6 @@ function ParkingCarAgent({
       </Suspense>
     </group>
   )
-}
-
-type RoundaboutLeg = 'west' | 'north' | 'east' | 'south'
-
-const ROUNDABOUT_ANGLES: Record<RoundaboutLeg, number> = {
-  east: 0,
-  south: Math.PI / 2,
-  west: Math.PI,
-  north: Math.PI * 1.5,
-}
-
-function approachRoadPoints(leg: RoundaboutLeg): Array<[number, number]> {
-  if (leg === 'west') {
-    return CITY_ROADS.eastBoulevard.points.slice(-4)
-  }
-
-  const road =
-    leg === 'north'
-      ? CITY_ROADS.roundaboutNorth
-      : leg === 'east'
-        ? CITY_ROADS.roundaboutEast
-        : CITY_ROADS.roundaboutSouth
-
-  return [...road.points].reverse()
-}
-
-function exitRoadPoints(leg: RoundaboutLeg): Array<[number, number]> {
-  if (leg === 'west') {
-    return [...CITY_ROADS.eastBoulevard.points.slice(-4)].reverse()
-  }
-
-  return leg === 'north'
-    ? CITY_ROADS.roundaboutNorth.points
-    : leg === 'east'
-      ? CITY_ROADS.roundaboutEast.points
-      : CITY_ROADS.roundaboutSouth.points
-}
-
-function roundaboutRoute(entry: RoundaboutLeg, exit: RoundaboutLeg) {
-  const [cx, cz] = ROUNDABOUT.center
-  const radius = ROUNDABOUT.laneRadius
-  const start = ROUNDABOUT_ANGLES[entry]
-  let finish = ROUNDABOUT_ANGLES[exit]
-
-  // Clockwise circulation in screen/world orientation. Never loop indefinitely.
-  while (finish <= start + 0.3) finish += Math.PI * 2
-
-  const points: THREE.Vector3[] = approachRoadPoints(entry).map(
-    ([x, z]) => new THREE.Vector3(x, 0, z),
-  )
-
-  points.push(
-    new THREE.Vector3(
-      cx + Math.cos(start) * radius,
-      0,
-      cz + Math.sin(start) * radius,
-    ),
-  )
-
-  const arc = finish - start
-  const steps = Math.max(5, Math.ceil((arc / (Math.PI * 2)) * 28))
-  for (let i = 1; i <= steps; i++) {
-    const angle = THREE.MathUtils.lerp(start, finish, i / steps)
-    points.push(
-      new THREE.Vector3(
-        cx + Math.cos(angle) * radius,
-        0,
-        cz + Math.sin(angle) * radius,
-      ),
-    )
-  }
-
-  for (const [x, z] of exitRoadPoints(exit)) {
-    points.push(new THREE.Vector3(x, 0, z))
-  }
-
-  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.14)
 }
 
 function RoundaboutCar({
@@ -408,7 +285,7 @@ function RoundaboutCar({
     }
 
     ref.current.visible = true
-    progress.current += delta / 8.5
+    progress.current += delta * 4.5 / curve.getLength()
     applyCurveTransform(ref.current, curve, progress.current)
 
     if (progress.current >= 1) {
@@ -484,12 +361,14 @@ function PedestrianAgent({
   speed,
   offset,
   shirt,
+  elevation,
 }: {
   running: boolean
   points: Array<[number, number]>
   speed: number
   offset: number
   shirt: string
+  elevation: number
 }) {
   const ref = useRef<THREE.Group>(null)
   const segment = useRef(0)
@@ -509,7 +388,7 @@ function PedestrianAgent({
 
     ref.current.position.set(
       THREE.MathUtils.lerp(from[0], to[0], t),
-      0.22,
+      elevation,
       THREE.MathUtils.lerp(from[1], to[1], t),
     )
     ref.current.rotation.y = -Math.atan2(dz, dx)
@@ -534,16 +413,7 @@ function PedestrianSystem({
   running: boolean
   quality: Exclude<Quality, 'low'>
 }) {
-  const loops: Array<Array<[number, number]>> = [
-    // Supermarket perimeter and entrance sidewalk.
-    [[-30.0, -7.4], [-13.0, -7.4], [-13.0, -21.5], [-30.0, -21.5]],
-    // Commercial strip sidewalk.
-    [[8.5, 10.2], [31.0, 10.2], [31.0, 21.5], [8.5, 21.5]],
-    // Civic garden block, intentionally kept off the curved road surface.
-    [[-35.5, 15.8], [-14.0, 15.8], [-14.0, 22.0], [-35.5, 22.0]],
-    // Supermarket entrance / cart shelter route.
-    [[-29.5, -7.2], [-21.5, -7.2], [-21.5, -16.0], [-21.5, -20.9]],
-  ]
+  const loops = PEDESTRIAN_PATHS
   const shirts = ['#346aa3', '#9e4d58', '#d2a43a', '#3d8068', '#725a9a', '#b2673c']
   const count = quality === 'high' ? 14 : 7
 
@@ -554,6 +424,7 @@ function PedestrianSystem({
           key={index}
           running={running}
           points={loops[index % loops.length]}
+          elevation={index % loops.length === 2 ? 0.26 : index % loops.length === 1 ? 0.18 : 0.04}
           speed={0.72 + (index % 4) * 0.08}
           offset={(index * 0.23) % 1}
           shirt={shirts[index % shirts.length]}
