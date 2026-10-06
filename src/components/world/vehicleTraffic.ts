@@ -3,7 +3,13 @@ import type { Group } from 'three'
 import { ROUNDABOUT } from './cityLayout'
 
 export type VehiclePose = { position: [number, number, number]; rotationY: number }
-export type VehicleActor = { group: Group; length: number; width: number; order: number }
+export type VehicleActor = {
+  group: Group
+  length: number
+  width: number
+  order: number
+  priority?: number
+}
 export type VehicleRegistry = MutableRefObject<Map<string, VehicleActor>>
 
 export function vehicleBodiesOverlap(a: VehiclePose, length: number, width: number, b: VehiclePose, otherLength: number, otherWidth: number, margin = 0.25) {
@@ -27,6 +33,23 @@ function actorPose(actor: VehicleActor): VehiclePose {
   return { position: [actor.group.position.x, actor.group.position.y, actor.group.position.z], rotationY: actor.group.rotation.y }
 }
 
+function actorSpeed(actor: VehicleActor) {
+  const value = actor.group.userData.trafficSpeed
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function otherHasPriority(self: VehicleActor, other: VehicleActor) {
+  const selfPriority = self.priority ?? 1
+  const otherPriority = other.priority ?? 1
+  return otherPriority === selfPriority
+    ? other.order < self.order
+    : otherPriority < selfPriority
+}
+
+export function desiredFollowingGap(speed: number) {
+  return 2.35 + Math.max(0, speed) * 0.55
+}
+
 function circulating(pose: VehiclePose) {
   const dx = pose.position[0] - ROUNDABOUT.center[0], dz = pose.position[2] - ROUNDABOUT.center[1]
   const radius = Math.hypot(dx, dz)
@@ -42,12 +65,33 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
   for (const [otherId, other] of registry.current) {
     if (otherId === id || !actorActive(other)) continue
     const pose = actorPose(other)
-    if (Math.hypot(pose.position[0] - now.position[0], pose.position[2] - now.position[2]) > 14) continue
-    const forward = (pose.position[0] - now.position[0]) * Math.cos(now.rotationY) - (pose.position[2] - now.position[2]) * Math.sin(now.rotationY)
-    const following = forward > 0 && Math.cos(now.rotationY - pose.rotationY) > 0.25
+    const dx = pose.position[0] - now.position[0]
+    const dz = pose.position[2] - now.position[2]
+    if (Math.hypot(dx, dz) > 16) continue
+
+    const forwardX = Math.cos(now.rotationY)
+    const forwardZ = -Math.sin(now.rotationY)
+    const forward = dx * forwardX + dz * forwardZ
+    const lateral = Math.abs(dx * (-forwardZ) + dz * forwardX)
+    const headingAlignment = Math.cos(now.rotationY - pose.rotationY)
+    const following = forward > 0 && lateral < 2.35 && headingAlignment > 0.62
+
+    if (following) {
+      const bumperGap = forward - (self.length + other.length) / 2
+      const wantedGap = desiredFollowingGap(actorSpeed(self) || desiredSpeed)
+      if (bumperGap <= 0.4) {
+        limit = 0
+      } else if (bumperGap < wantedGap + 3) {
+        const leaderSpeed = actorSpeed(other)
+        const correction = Math.max(-leaderSpeed, Math.min(1.8, (bumperGap - wantedGap) * 0.9))
+        limit = Math.min(limit, Math.max(0, leaderSpeed + correction))
+      }
+    }
+
     const selfCircle = circulating(now), otherCircle = circulating(pose)
     const yieldToOther = following || (otherCircle && !selfCircle) ||
-      (selfCircle && otherCircle && forward > 0) || (!selfCircle && !otherCircle && other.order < self.order)
+      (selfCircle && otherCircle && forward > 0) ||
+      (!selfCircle && !otherCircle && otherHasPriority(self, other))
     if (!yieldToOther) continue
     for (const distance of [1.5, 3, 6]) {
       if (vehicleBodiesOverlap(poseAtDistance(distance), self.length, self.width, pose, other.length, other.width, 0.6)) {
