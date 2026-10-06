@@ -91,6 +91,7 @@ function ParkingCarAgent({
   color,
   delay,
   dwellSeconds,
+  trafficOrder,
   vehicleActors,
   pedestrianActors,
   actors,
@@ -102,6 +103,7 @@ function ParkingCarAgent({
   color: string
   delay: number
   dwellSeconds: number
+  trafficOrder: number
   vehicleActors: Actors
   pedestrianActors: Actors
   actors: VehicleRegistry
@@ -151,7 +153,7 @@ function ParkingCarAgent({
     if (ref.current) {
       vehicleActors.current.set(id, ref.current)
       ref.current.userData.trafficActive = false
-      actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order: 200 })
+      actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order: trafficOrder })
     }
     return () => {
       const spot = spotRef.current
@@ -159,7 +161,7 @@ function ParkingCarAgent({
       vehicleActors.current.delete(id)
       actors.current.delete(id)
     }
-  }, [id, occupancy, vehicleActors, actors])
+  }, [id, occupancy, vehicleActors, actors, trafficOrder])
 
   useFrame((_frame, deltaRaw) => {
     const group = ref.current
@@ -524,6 +526,7 @@ export function CityLife({
         color="#4f7087"
         delay={1}
         dwellSeconds={7}
+        trafficOrder={220}
       />
       {quality === 'high' && (
         <ParkingCarAgent
@@ -537,6 +540,7 @@ export function CityLife({
           color="#8a343c"
           delay={5}
           dwellSeconds={10}
+          trafficOrder={221}
         />
       )}
       <RoundaboutTraffic running={running} quality={quality} actors={actors} />
