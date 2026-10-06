@@ -10,6 +10,7 @@ import {
 import type { IntersectionTrafficState, SignalId, TrafficState } from '../types'
 import { CityDistricts } from './world/CityDistricts'
 import { CityLife } from './world/CityLife'
+import { CITY_LIMITS, CITY_ROADS } from './world/cityLayout'
 import { UrbanRoadNetwork } from './world/RoadNetwork'
 import { Planter, StreetLamp, Tree } from './world/StreetFurniture'
 import {
@@ -365,7 +366,7 @@ function RoadScene({
     <>
       {/* World base */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.07, 0]}>
-        <planeGeometry args={[94, 86]} />
+        <planeGeometry args={[CITY_LIMITS.width, CITY_LIMITS.depth]} />
         <meshStandardMaterial color="#10191e" roughness={0.99} />
       </mesh>
 
@@ -525,33 +526,20 @@ const VERTICAL_SPAWN = -(TRAFFIC_WORLD.worldDepth / 2 - 1)
 const VERTICAL_EXIT = TRAFFIC_WORLD.worldDepth / 2 - 1
 
 const EAST_ROAD_CURVE = new THREE.CatmullRomCurve3(
-  [
-    new THREE.Vector3(-31, 0.02, 0),
-    new THREE.Vector3(-18, 0.02, 0),
-    new THREE.Vector3(-7, 0.02, 0),
-    new THREE.Vector3(7, 0.02, 0),
-    new THREE.Vector3(16, 0.02, -1.0),
-    new THREE.Vector3(24, 0.02, -4.2),
-    new THREE.Vector3(31, 0.02, -9.2),
-  ],
+  CITY_ROADS.eastBoulevard.points.map(
+    ([x, z]) => new THREE.Vector3(x, 0.02, z),
+  ),
   false,
   'catmullrom',
-  0.28,
+  0.32,
 )
 
-function horizontalRoadPose(
-  progress: number,
-  laneOffset: number,
-  reverse = false,
-) {
-  const normalized = THREE.MathUtils.clamp(
-    (progress - TRAFFIC_WORLD.spawnX) / (TRAFFIC_WORLD.exitX - TRAFFIC_WORLD.spawnX),
-    0,
-    1,
+function boulevardPose(t: number, laneOffset: number, reverse = false) {
+  const clamped = THREE.MathUtils.clamp(t, 0, 1)
+  const point = EAST_ROAD_CURVE.getPointAt(clamped)
+  const tangent = EAST_ROAD_CURVE.getTangentAt(
+    Math.min(0.999, Math.max(0.001, clamped)),
   )
-  const t = reverse ? 1 - normalized : normalized
-  const point = EAST_ROAD_CURVE.getPointAt(t)
-  const tangent = EAST_ROAD_CURVE.getTangentAt(Math.min(0.999, Math.max(0.001, t)))
   const length = Math.max(0.0001, Math.hypot(tangent.x, tangent.z))
   const nx = -tangent.z / length
   const nz = tangent.x / length
@@ -565,6 +553,43 @@ function horizontalRoadPose(
     ] as [number, number, number],
     rotationY: -Math.atan2(tangent.z, tangent.x) + (reverse ? Math.PI : 0),
   }
+}
+
+/**
+ * Keep the PLC-controlled intersection geometrically straight so stop-line math
+ * remains exact. Only after the car clears the intersection does it transition
+ * onto the urban boulevard spline.
+ */
+function horizontalRoadPose(
+  progress: number,
+  laneOffset: number,
+  reverse = false,
+) {
+  const transition = TRAFFIC_WORLD.intersectionHalf
+
+  if (!reverse) {
+    if (progress <= transition) {
+      return {
+        position: [progress, 0.02, laneOffset] as [number, number, number],
+        rotationY: 0,
+      }
+    }
+
+    const t = (progress - transition) / (TRAFFIC_WORLD.exitX - transition)
+    return boulevardPose(t, laneOffset, false)
+  }
+
+  if (progress >= -transition) {
+    return {
+      position: [-progress, 0.02, -laneOffset] as [number, number, number],
+      rotationY: Math.PI,
+    }
+  }
+
+  const t =
+    (-transition - progress) /
+    (-transition - TRAFFIC_WORLD.spawnX)
+  return boulevardPose(1 - t, laneOffset, true)
 }
 
 const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
@@ -880,9 +905,9 @@ function RainSystem({
   const positions = useMemo(() => {
     const data = new Float32Array(count * 3)
     for (let i = 0; i < count; i++) {
-      data[i * 3] = (Math.random() - 0.5) * 82
+      data[i * 3] = (Math.random() - 0.5) * CITY_LIMITS.width
       data[i * 3 + 1] = Math.random() * 34 + 2
-      data[i * 3 + 2] = (Math.random() - 0.5) * 66
+      data[i * 3 + 2] = (Math.random() - 0.5) * CITY_LIMITS.depth
     }
     return data
   }, [count])
@@ -904,14 +929,16 @@ function RainSystem({
       positions[index + 2] += driftZ * delta
 
       if (positions[index + 1] < 0) {
-        positions[index] = (Math.random() - 0.5) * 82
+        positions[index] = (Math.random() - 0.5) * CITY_LIMITS.width
         positions[index + 1] = 30 + Math.random() * 8
-        positions[index + 2] = (Math.random() - 0.5) * 66
+        positions[index + 2] = (Math.random() - 0.5) * CITY_LIMITS.depth
       }
-      if (positions[index] > 44) positions[index] = -44
-      if (positions[index] < -44) positions[index] = 44
-      if (positions[index + 2] > 36) positions[index + 2] = -36
-      if (positions[index + 2] < -36) positions[index + 2] = 36
+      const halfWidth = CITY_LIMITS.width / 2
+      const halfDepth = CITY_LIMITS.depth / 2
+      if (positions[index] > halfWidth) positions[index] = -halfWidth
+      if (positions[index] < -halfWidth) positions[index] = halfWidth
+      if (positions[index + 2] > halfDepth) positions[index + 2] = -halfDepth
+      if (positions[index + 2] < -halfDepth) positions[index + 2] = halfDepth
     }
     attribute.needsUpdate = true
   })
@@ -949,9 +976,9 @@ function WindParticles({
   const positions = useMemo(() => {
     const data = new Float32Array(count * 3)
     for (let i = 0; i < count; i++) {
-      data[i * 3] = (Math.random() - 0.5) * 88
+      data[i * 3] = (Math.random() - 0.5) * CITY_LIMITS.width
       data[i * 3 + 1] = 0.5 + Math.random() * 5
-      data[i * 3 + 2] = (Math.random() - 0.5) * 64
+      data[i * 3 + 2] = (Math.random() - 0.5) * CITY_LIMITS.depth
     }
     return data
   }, [count])
@@ -970,10 +997,12 @@ function WindParticles({
       positions[index + 2] += vz * delta
       positions[index + 1] += Math.sin((i + performance.now() * 0.001) * 0.8) * 0.001
 
-      if (positions[index] > 46) positions[index] = -46
-      if (positions[index] < -46) positions[index] = 46
-      if (positions[index + 2] > 34) positions[index + 2] = -34
-      if (positions[index + 2] < -34) positions[index + 2] = 34
+      const halfWidth = CITY_LIMITS.width / 2
+      const halfDepth = CITY_LIMITS.depth / 2
+      if (positions[index] > halfWidth) positions[index] = -halfWidth
+      if (positions[index] < -halfWidth) positions[index] = halfWidth
+      if (positions[index + 2] > halfDepth) positions[index + 2] = -halfDepth
+      if (positions[index + 2] < -halfDepth) positions[index + 2] = halfDepth
     }
     attribute.needsUpdate = true
   })
@@ -1078,7 +1107,7 @@ function Scene({
   return (
     <>
       <color attach="background" args={[palette.sky]} />
-      <fog attach="fog" args={[palette.fog, 40 - environment.rain * 10, 118 - environment.rain * 38]} />
+      <fog attach="fog" args={[palette.fog, 48 - environment.rain * 10, 155 - environment.rain * 42]} />
 
       <ambientLight intensity={palette.ambient} />
       <hemisphereLight
@@ -1122,12 +1151,12 @@ function Scene({
 
       <OrbitControls
         makeDefault
-        target={[0, 0.9, 0]}
+        target={[8, 0.9, -8]}
         enablePan
         enableRotate
         enableZoom
         minDistance={12}
-        maxDistance={86}
+        maxDistance={118}
         maxPolarAngle={Math.PI / 2 - 0.08}
         panSpeed={0.9}
         rotateSpeed={0.65}
@@ -1150,7 +1179,7 @@ export function TrafficSimulation3D({
         key={quality}
         frameloop="demand"
         dpr={quality === 'low' ? 0.8 : quality === 'medium' ? 1 : 1.25}
-        camera={{ position: [27, 24, 34], fov: 50 }}
+        camera={{ position: [35, 31, 47], fov: 50 }}
         gl={{
           antialias: quality === 'high',
           alpha: false,
