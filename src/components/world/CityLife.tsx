@@ -6,6 +6,7 @@ import {
   type VehicleVariant,
 } from './VehicleModel'
 import {
+  CITY_ROADS,
   ROUNDABOUT,
   SUPERMARKET_PARKING_SPOTS,
   type ParkingSpotDefinition,
@@ -299,27 +300,55 @@ function ParkingCarAgent({
   )
 }
 
-type RoundaboutExit = 'north' | 'east' | 'west'
+type RoundaboutLeg = 'west' | 'north' | 'east' | 'south'
 
-function roundaboutRoute(entry: 'west' | 'north' | 'east', exit: RoundaboutExit) {
+const ROUNDABOUT_ANGLES: Record<RoundaboutLeg, number> = {
+  east: 0,
+  south: Math.PI / 2,
+  west: Math.PI,
+  north: Math.PI * 1.5,
+}
+
+function approachRoadPoints(leg: RoundaboutLeg): Array<[number, number]> {
+  if (leg === 'west') {
+    return CITY_ROADS.eastBoulevard.points.slice(-4)
+  }
+
+  const road =
+    leg === 'north'
+      ? CITY_ROADS.roundaboutNorth
+      : leg === 'east'
+        ? CITY_ROADS.roundaboutEast
+        : CITY_ROADS.roundaboutSouth
+
+  return [...road.points].reverse()
+}
+
+function exitRoadPoints(leg: RoundaboutLeg): Array<[number, number]> {
+  if (leg === 'west') {
+    return [...CITY_ROADS.eastBoulevard.points.slice(-4)].reverse()
+  }
+
+  return leg === 'north'
+    ? CITY_ROADS.roundaboutNorth.points
+    : leg === 'east'
+      ? CITY_ROADS.roundaboutEast.points
+      : CITY_ROADS.roundaboutSouth.points
+}
+
+function roundaboutRoute(entry: RoundaboutLeg, exit: RoundaboutLeg) {
   const [cx, cz] = ROUNDABOUT.center
   const radius = ROUNDABOUT.laneRadius
-  const entryAngles = { west: Math.PI, north: Math.PI * 1.5, east: 0 }
-  const exitAngles = { west: Math.PI, north: Math.PI * 1.5, east: Math.PI * 2 }
+  const start = ROUNDABOUT_ANGLES[entry]
+  let finish = ROUNDABOUT_ANGLES[exit]
 
-  const start = entryAngles[entry]
-  let finish = exitAngles[exit]
-  while (finish <= start + 0.35) finish += Math.PI * 2
+  // Clockwise circulation in screen/world orientation. Never loop indefinitely.
+  while (finish <= start + 0.3) finish += Math.PI * 2
 
-  const points: THREE.Vector3[] = []
-  const entryPoint =
-    entry === 'west'
-      ? new THREE.Vector3(8.5, 0, -14.5)
-      : entry === 'north'
-        ? new THREE.Vector3(21.5, 0, -27.5)
-        : new THREE.Vector3(34.5, 0, -14.5)
+  const points: THREE.Vector3[] = approachRoadPoints(entry).map(
+    ([x, z]) => new THREE.Vector3(x, 0, z),
+  )
 
-  points.push(entryPoint)
   points.push(
     new THREE.Vector3(
       cx + Math.cos(start) * radius,
@@ -328,7 +357,8 @@ function roundaboutRoute(entry: 'west' | 'north' | 'east', exit: RoundaboutExit)
     ),
   )
 
-  const steps = Math.max(5, Math.ceil(((finish - start) / (Math.PI * 2)) * 24))
+  const arc = finish - start
+  const steps = Math.max(5, Math.ceil((arc / (Math.PI * 2)) * 28))
   for (let i = 1; i <= steps; i++) {
     const angle = THREE.MathUtils.lerp(start, finish, i / steps)
     points.push(
@@ -340,11 +370,11 @@ function roundaboutRoute(entry: 'west' | 'north' | 'east', exit: RoundaboutExit)
     )
   }
 
-  if (exit === 'west') points.push(new THREE.Vector3(8.5, 0, -14.5))
-  if (exit === 'north') points.push(new THREE.Vector3(21.5, 0, -28.0))
-  if (exit === 'east') points.push(new THREE.Vector3(35.0, 0, -14.5))
+  for (const [x, z] of exitRoadPoints(exit)) {
+    points.push(new THREE.Vector3(x, 0, z))
+  }
 
-  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.12)
+  return new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0.14)
 }
 
 function RoundaboutCar({
@@ -357,8 +387,8 @@ function RoundaboutCar({
 }: {
   running: boolean
   delay: number
-  entry: 'west' | 'north' | 'east'
-  exit: RoundaboutExit
+  entry: RoundaboutLeg
+  exit: RoundaboutLeg
   variant: VehicleVariant
   color: string
 }) {
@@ -407,8 +437,9 @@ function RoundaboutTraffic({
   const routes = quality === 'high'
     ? [
         { delay: 0, entry: 'west' as const, exit: 'north' as const, variant: 'concept' as VehicleVariant, color: '#f0f2f3' },
-        { delay: 4, entry: 'north' as const, exit: 'east' as const, variant: 'sport' as VehicleVariant, color: '#2f5f9a' },
-        { delay: 8, entry: 'east' as const, exit: 'west' as const, variant: 'lc80' as VehicleVariant, color: '#8b2f3c' },
+        { delay: 3.8, entry: 'north' as const, exit: 'east' as const, variant: 'sport' as VehicleVariant, color: '#2f5f9a' },
+        { delay: 7.5, entry: 'east' as const, exit: 'south' as const, variant: 'lc80' as VehicleVariant, color: '#8b2f3c' },
+        { delay: 11.0, entry: 'south' as const, exit: 'west' as const, variant: 'ferrari' as VehicleVariant, color: '#d7d4ca' },
       ]
     : [
         { delay: 0, entry: 'west' as const, exit: 'east' as const, variant: 'concept' as VehicleVariant, color: '#f0f2f3' },
@@ -504,10 +535,14 @@ function PedestrianSystem({
   quality: Exclude<Quality, 'low'>
 }) {
   const loops: Array<Array<[number, number]>> = [
-    [[-30, -7.7], [-13, -7.7], [-13, -21.0], [-30, -21.0]],
-    [[9, 8.0], [31, 8.0], [31, 21.0], [9, 21.0]],
-    [[8.5, -7.8], [31, -7.8], [31, -22.0], [8.5, -22.0]],
-    [[-29.5, -7.5], [-21.5, -7.5], [-21.5, -15.9], [-21.5, -20.8]],
+    // Supermarket perimeter and entrance sidewalk.
+    [[-30.0, -7.4], [-13.0, -7.4], [-13.0, -21.5], [-30.0, -21.5]],
+    // Commercial strip sidewalk.
+    [[8.5, 10.2], [31.0, 10.2], [31.0, 21.5], [8.5, 21.5]],
+    // Civic garden block, intentionally kept off the curved road surface.
+    [[-35.5, 15.8], [-14.0, 15.8], [-14.0, 22.0], [-35.5, 22.0]],
+    // Supermarket entrance / cart shelter route.
+    [[-29.5, -7.2], [-21.5, -7.2], [-21.5, -16.0], [-21.5, -20.9]],
   ]
   const shirts = ['#346aa3', '#9e4d58', '#d2a43a', '#3d8068', '#725a9a', '#b2673c']
   const count = quality === 'high' ? 14 : 7
