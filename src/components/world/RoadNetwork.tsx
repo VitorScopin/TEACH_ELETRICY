@@ -49,23 +49,36 @@ function RoadRibbon({
   color = '#2a3033',
   y = 0.028,
   rain = 0,
+  curb = true,
 }: {
   points: Vec2Point[]
   width: number
   color?: string
   y?: number
   rain?: number
+  curb?: boolean
 }) {
   const geometry = useMemo(() => buildRibbonGeometry(points, width, y), [points, width, y])
+  const curbGeometry = useMemo(
+    () => buildRibbonGeometry(points, width + 1.15, y - 0.012),
+    [points, width, y],
+  )
 
   return (
-    <mesh geometry={geometry}>
-      <meshStandardMaterial
-        color={color}
-        roughness={Math.max(0.26, 0.9 - rain * 0.52)}
-        metalness={Math.min(0.18, rain * 0.16)}
-      />
-    </mesh>
+    <group>
+      {curb && (
+        <mesh geometry={curbGeometry}>
+          <meshStandardMaterial color="#929895" roughness={0.94} />
+        </mesh>
+      )}
+      <mesh geometry={geometry}>
+        <meshStandardMaterial
+          color={color}
+          roughness={Math.max(0.26, 0.9 - rain * 0.52)}
+          metalness={Math.min(0.18, rain * 0.16)}
+        />
+      </mesh>
+    </group>
   )
 }
 
@@ -261,6 +274,36 @@ function Island({
   )
 }
 
+function CivicGarden({ nightFactor }: { nightFactor: number }) {
+  return (
+    <group position={[-24.5, 0.04, 15.3]} rotation={[0, -0.18, 0]}>
+      <mesh position={[0, 0.10, 0]}>
+        <boxGeometry args={[15.5, 0.20, 7.0]} />
+        <meshStandardMaterial color="#587451" roughness={1} />
+      </mesh>
+
+      {[
+        [-5.4, -1.8],
+        [-2.4, 1.5],
+        [1.0, -1.6],
+        [4.9, 1.2],
+      ].map(([x, z], index) => (
+        <Tree key={index} position={[x, 0.18, z]} scale={0.54 + (index % 2) * 0.1} />
+      ))}
+
+      {[-6.5, -3.25, 0, 3.25, 6.5].map((x) => (
+        <mesh key={x} position={[x, 0.23, 2.35]}>
+          <boxGeometry args={[2.25, 0.24, 1.05]} />
+          <meshStandardMaterial color={x === 0 ? '#6f5b86' : '#496d49'} roughness={1} />
+        </mesh>
+      ))}
+
+      <StreetLamp position={[-6.4, 0.1, -2.4]} nightFactor={nightFactor} />
+      <StreetLamp position={[6.4, 0.1, 2.4]} nightFactor={nightFactor} />
+    </group>
+  )
+}
+
 const EAST_BOULEVARD_CENTER: Vec2Point[] = [
   [6.5, -2],
   [14, -3],
@@ -317,6 +360,7 @@ export function UrbanRoadNetwork({
       {/* Park-side curved local street. */}
       <RoadRibbon points={WEST_PARK_ROAD} width={7.4} color="#252c2f" rain={rain} />
       <MarkingRibbon points={WEST_PARK_ROAD} width={0.09} color="#f2f2ed" dashed />
+      <CivicGarden nightFactor={nightFactor} />
 
       {/* Channelising islands shape entries and exits, like the reference. */}
       <Island position={[31.5, 0, -4.2]} rotationY={0.42} scale={[1.55, 0.72]} />
