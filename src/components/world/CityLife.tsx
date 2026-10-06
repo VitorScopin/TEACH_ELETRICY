@@ -31,6 +31,7 @@ export type ParkingCarState =
 
 type OccupancyTable = Map<string, string>
 type Actors = React.MutableRefObject<Map<string, THREE.Group>>
+type MovementOwner = React.MutableRefObject<string | null>
 
 const STATIC_CARS = [
   { spotId: 'A02', variant: 'concept' as VehicleVariant, color: '#d9e1e5' },
@@ -91,7 +92,7 @@ function ParkingCarAgent({
   color,
   delay,
   dwellSeconds,
-  trafficOrder,
+  movementOwner,
   vehicleActors,
   pedestrianActors,
   actors,
@@ -103,7 +104,7 @@ function ParkingCarAgent({
   color: string
   delay: number
   dwellSeconds: number
-  trafficOrder: number
+  movementOwner: MovementOwner
   vehicleActors: Actors
   pedestrianActors: Actors
   actors: VehicleRegistry
@@ -115,31 +116,21 @@ function ParkingCarAgent({
   const motionSpeed = useRef(0)
   const elapsed = useRef(0)
   const spotRef = useRef<ParkingSpotDefinition | null>(null)
-  const parkingVisit = useRef(0)
   const approachRef = useRef<THREE.CatmullRomCurve3 | null>(null)
   const alignRef = useRef<THREE.CatmullRomCurve3 | null>(null)
   const exitRef = useRef<THREE.CatmullRomCurve3 | null>(null)
 
   const reserveSpot = () => {
-    const free = SUPERMARKET_PARKING_SPOTS.filter(
+    const free = SUPERMARKET_PARKING_SPOTS.find(
       (spot) => !spot.accessible && !occupancy.current.has(spot.id),
     )
-    if (!free.length) return null
-
-    const idSeed = Array.from(id).reduce(
-      (sum, char) => sum + char.charCodeAt(0),
-      0,
-    )
-    const freeIndex = (idSeed + parkingVisit.current * 3) % free.length
-    const selected = free[freeIndex]
-    parkingVisit.current += 1
-
-    occupancy.current.set(selected.id, id)
-    spotRef.current = selected
-    approachRef.current = parkingApproachCurve(selected)
-    alignRef.current = parkingAlignCurve(selected)
-    exitRef.current = parkingExitCurve(selected)
-    return selected
+    if (!free) return null
+    occupancy.current.set(free.id, id)
+    spotRef.current = free
+    approachRef.current = parkingApproachCurve(free)
+    alignRef.current = parkingAlignCurve(free)
+    exitRef.current = parkingExitCurve(free)
+    return free
   }
 
   const resetAgent = () => {
@@ -147,6 +138,7 @@ function ParkingCarAgent({
     if (spot && occupancy.current.get(spot.id) === id) {
       occupancy.current.delete(spot.id)
     }
+    if (movementOwner.current === id) movementOwner.current = null
     state.current = 'driving'
     stateProgress.current = 0
     parkedTimer.current = 0
@@ -163,23 +155,16 @@ function ParkingCarAgent({
     if (ref.current) {
       vehicleActors.current.set(id, ref.current)
       ref.current.userData.trafficActive = false
-      ref.current.userData.trafficSpeed = 0
-      actors.current.set(id, {
-        group: ref.current,
-        length: 4.82,
-        width: 1.9,
-        order: trafficOrder,
-        priority: 2,
-        trafficClass: 'parking',
-      })
+      actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order: 200 })
     }
     return () => {
       const spot = spotRef.current
       if (spot && occupancy.current.get(spot.id) === id) occupancy.current.delete(spot.id)
+      if (movementOwner.current === id) movementOwner.current = null
       vehicleActors.current.delete(id)
       actors.current.delete(id)
     }
-  }, [id, occupancy, vehicleActors, actors, trafficOrder])
+  }, [id, occupancy, movementOwner, vehicleActors, actors])
 
   useFrame((_frame, deltaRaw) => {
     const group = ref.current
@@ -191,7 +176,6 @@ function ParkingCarAgent({
     if (elapsed.current < delay) {
       group.visible = false
       group.userData.trafficActive = false
-      group.userData.trafficSpeed = 0
       return
     }
 
@@ -203,6 +187,11 @@ function ParkingCarAgent({
       }
     }
 
+    if (state.current === 'driving' && movementOwner.current && movementOwner.current !== id) {
+      group.visible = false
+      group.userData.trafficActive = false
+      return
+    }
     group.visible = true
     group.userData.trafficActive = true
     const spot = spotRef.current
@@ -229,7 +218,6 @@ function ParkingCarAgent({
       motionSpeed.current += THREE.MathUtils.clamp(allowed - motionSpeed.current, -3 * delta, 1.5 * delta)
       const distance = safeVehicleStep(actors, id, Math.min(remaining, motionSpeed.current * delta), poseAtDistance)
       motionSpeed.current = delta > 0 ? distance / delta : 0
-      group.userData.trafficSpeed = motionSpeed.current
       stateProgress.current += distance / length
       if (remaining - distance < 0.001) stateProgress.current = 1
       applyCurveTransform(group, curve, backing ? 1 - stateProgress.current : stateProgress.current)
@@ -243,6 +231,7 @@ function ParkingCarAgent({
           group.userData.trafficActive = false
           return
         }
+        movementOwner.current = id
         state.current = 'entering-parking'
         stateProgress.current = 0
         break
@@ -284,19 +273,18 @@ function ParkingCarAgent({
           group.rotation.y = spot.rotationY
           state.current = 'parked'
           parkedTimer.current = 0
+          if (movementOwner.current === id) movementOwner.current = null
         }
         break
       }
 
       case 'parked':
         motionSpeed.current = 0
-        group.userData.trafficSpeed = 0
-        group.userData.trafficActive = false
         parkedTimer.current += delta
         group.position.set(spot.position[0], 0.04, spot.position[2])
         group.rotation.y = spot.rotationY
-        if (parkedTimer.current >= dwellSeconds) {
-          group.userData.trafficActive = true
+        if (parkedTimer.current >= dwellSeconds && (!movementOwner.current || movementOwner.current === id)) {
+          movementOwner.current = id
           state.current = 'leaving-space'
           stateProgress.current = 0
         }
@@ -337,8 +325,6 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
 }) {
   const ref = useRef<THREE.Group>(null)
   const elapsed = useRef(0), progress = useRef(0), speed = useRef(0)
-  const cycle = useRef(0)
-  const delayTarget = useRef(delay)
   const length = useMemo(() => curve.getLength(), [curve])
   const poseAt = (distance: number) => {
     const t = THREE.MathUtils.clamp((progress.current + distance) / length, 0, 1)
@@ -346,14 +332,7 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
     return { position: [point.x, 0.06, point.z] as [number, number, number], rotationY: -Math.atan2(tangent.z, tangent.x) }
   }
   useEffect(() => {
-    if (ref.current) { ref.current.userData.trafficActive = false; ref.current.userData.trafficSpeed = 0; actors.current.set(id, {
-        group: ref.current,
-        length: 4.82,
-        width: 1.9,
-        order,
-        priority: 1,
-        trafficClass: 'city',
-      }) }
+    if (ref.current) { ref.current.userData.trafficActive = false; actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order }) }
     return () => { actors.current.delete(id) }
   }, [id, actors, order])
   useFrame((_frame, deltaRaw) => {
@@ -361,7 +340,7 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
     if (!running || !group) return
     const delta = Math.min(deltaRaw, 0.05)
     elapsed.current += delta
-    if (elapsed.current < delayTarget.current) { group.visible = false; group.userData.trafficActive = false; return }
+    if (elapsed.current < delay) { group.visible = false; group.userData.trafficActive = false; return }
     if (!group.userData.trafficActive) {
       const pose = poseAt(0)
       group.position.set(...pose.position); group.rotation.y = pose.rotationY
@@ -373,19 +352,11 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
     speed.current += THREE.MathUtils.clamp(target - speed.current, -4 * delta, 1.8 * delta)
     const distance = safeVehicleStep(actors, id, speed.current * delta, poseAt)
     if (distance < speed.current * delta) speed.current = delta ? distance / delta : 0
-    group.userData.trafficSpeed = speed.current
     progress.current += distance
     applyCurveTransform(group, curve, progress.current / length)
     updateVehicleVisuals(group, speed.current, delta, target < speed.current - 0.1)
     if (progress.current >= length) {
-      progress.current = 0
-      elapsed.current = 0
-      speed.current = 0
-      cycle.current += 1
-      delayTarget.current =
-        delay * (0.76 + ((order + cycle.current * 3) % 6) * 0.09)
-      group.visible = false
-      group.userData.trafficActive = false
+      progress.current = 0; elapsed.current = 0; speed.current = 0; group.visible = false; group.userData.trafficActive = false
     }
   })
   return <group ref={ref} visible={false}><Suspense fallback={null}><RealisticCarModel variant={variant} color={color} /></Suspense></group>
@@ -541,6 +512,7 @@ export function CityLife({
   actors: VehicleRegistry
 }) {
   const occupancy = useRef<OccupancyTable>(new Map())
+  const movementOwner = useRef<string | null>(null)
   const vehicleActors = useRef<Map<string, THREE.Group>>(new Map())
   const pedestrianActors = useRef<Map<string, THREE.Group>>(new Map())
 
@@ -560,13 +532,13 @@ export function CityLife({
         running={running}
         actors={actors}
         occupancy={occupancy}
+        movementOwner={movementOwner}
         vehicleActors={vehicleActors}
         pedestrianActors={pedestrianActors}
         variant="concept"
         color="#4f7087"
         delay={1}
         dwellSeconds={7}
-        trafficOrder={220}
       />
       {quality === 'high' && (
         <ParkingCarAgent
@@ -574,13 +546,13 @@ export function CityLife({
           running={running}
           actors={actors}
           occupancy={occupancy}
+          movementOwner={movementOwner}
           vehicleActors={vehicleActors}
           pedestrianActors={pedestrianActors}
           variant="sport"
           color="#8a343c"
           delay={5}
           dwellSeconds={10}
-          trafficOrder={221}
         />
       )}
       <RoundaboutTraffic running={running} quality={quality} actors={actors} />
