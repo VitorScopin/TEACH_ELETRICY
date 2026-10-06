@@ -1,3 +1,4 @@
+import { ASPHALT_HEIGHT, asphaltMaterial } from './roadSurface'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { CITY_ROADS, SUPERMARKET, SUPERMARKET_PARKING_SPOTS, type ParkingSpotDefinition } from './cityLayout'
@@ -146,9 +147,9 @@ export function SupermarketDistrict({ quality, rain, nightFactor }: { quality: Q
   }, [crossing])
   useEffect(() => () => ramp.dispose(), [ramp])
   return <group>
-    <mesh position={SUPERMARKET.parkingCenter} rotation={[-Math.PI / 2, 0, 0]} scale={[...SUPERMARKET.parkingSize, 1]}>
+    <mesh position={[SUPERMARKET.parkingCenter[0], ASPHALT_HEIGHT, SUPERMARKET.parkingCenter[2]]} rotation={[-Math.PI / 2, 0, 0]} scale={[...SUPERMARKET.parkingSize, 1]}>
       <primitive object={UNIT_PLANE} attach="geometry" />
-      <meshStandardMaterial color={rain > 0.1 ? '#293639' : '#384245'} roughness={0.9 - rain * 0.6} metalness={rain * 0.18} />
+      <meshStandardMaterial {...asphaltMaterial(rain)} />
     </mesh>
     <SupermarketBuilding quality={quality} nightFactor={nightFactor} />
     {SUPERMARKET_PARKING_SPOTS.map(spot => <ParkingSpace key={spot.id} spot={spot} />)}

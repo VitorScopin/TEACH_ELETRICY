@@ -1,3 +1,4 @@
+import { ASPHALT_HEIGHT, asphaltMaterial } from './world/roadSurface'
 import { UrbanNeighborhoods } from './world/UrbanNeighborhoods'
 import { updateVehicleVisuals } from './world/vehicleVisuals'
 import { OrbitControls, useGLTF } from '@react-three/drei'
@@ -278,41 +279,14 @@ function RoadScene({
       </mesh>
 
       {/* Asphalt roads crossing at 90 degrees */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - (CITY_LIMITS.width / 2 + CITY_BORDER)) / 2, 0.03, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - (CITY_LIMITS.width / 2 + CITY_BORDER)) / 2, ASPHALT_HEIGHT, 0]}>
         <planeGeometry args={[CITY_LIMITS.width / 2 + CITY_BORDER + BOULEVARD_START, TRAFFIC_WORLD.roadWidth]} />
-        <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3} />
+        <meshStandardMaterial {...asphaltMaterial(rain)} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.032, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, ASPHALT_HEIGHT, 0]}>
         <planeGeometry args={[TRAFFIC_WORLD.roadWidth, CITY_LIMITS.depth + CITY_BORDER * 2]} />
-        <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3} />
+        <meshStandardMaterial {...asphaltMaterial(rain)} />
       </mesh>
-
-      {rain > 0.02 && (
-        <>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - (CITY_LIMITS.width / 2 + CITY_BORDER)) / 2, 0.034, 0]}>
-            <planeGeometry args={[CITY_LIMITS.width / 2 + CITY_BORDER + BOULEVARD_START, TRAFFIC_WORLD.roadWidth]} />
-            <meshStandardMaterial
-              color="#172027"
-              polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-4}
-              transparent
-              opacity={Math.min(0.42, rain * 0.38)}
-              roughness={Math.max(0.18, 0.55 - rain * 0.35)}
-              metalness={Math.min(0.32, rain * 0.28)}
-            />
-          </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.035, 0]}>
-            <planeGeometry args={[TRAFFIC_WORLD.roadWidth, CITY_LIMITS.depth + CITY_BORDER * 2]} />
-            <meshStandardMaterial
-              color="#172027"
-              polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-4}
-              transparent
-              opacity={Math.min(0.42, rain * 0.38)}
-              roughness={Math.max(0.18, 0.55 - rain * 0.35)}
-              metalness={Math.min(0.32, rain * 0.28)}
-            />
-          </mesh>
-        </>
-      )}
 
       {/* Stop bars on the approach side of each crosswalk */}
       <RoadMark
@@ -343,12 +317,6 @@ function RoadScene({
       <ArrowMark position={[TRAFFIC_GEOMETRY.eastStopLineX + 4.0, 0, TRAFFIC_WORLD.westboundLaneZ]} rotationY={Math.PI} />
       <ArrowMark position={[-TRAFFIC_WORLD.eastboundLaneZ, 0, TRAFFIC_GEOMETRY.southStopLineZ - 4.0]} rotationY={-Math.PI / 2} />
       <ArrowMark position={[TRAFFIC_WORLD.eastboundLaneZ, 0, TRAFFIC_GEOMETRY.northStopLineZ + 4.0]} rotationY={Math.PI / 2} />
-
-      {/* Clean center asphalt patch over line fragments */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
-        <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.roadWidth]} />
-        <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3} />
-      </mesh>
 
       <SupermarketDistrict quality={quality} rain={rain} nightFactor={nightFactor} />
       <RoundaboutDistrict rain={rain} nightFactor={nightFactor} />

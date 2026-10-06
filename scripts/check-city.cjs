@@ -281,3 +281,20 @@ for (const building of CITY_FRAME_BUILDINGS) {
   assert(Math.abs(building.position[0] - SUPERMARKET.position[0]) >= half + SUPERMARKET.buildingSize[0] / 2 || Math.abs(building.position[2] - SUPERMARKET.position[2]) >= half + SUPERMARKET.buildingSize[2] / 2, 'market building clears neighbouring buildings')
 }
 console.log('Market frontage, independent sidewalks, driveway openings and relocated building clearances passed.')
+
+const { ASPHALT_HEIGHT, asphaltMaterial, connectingPavementCovers } = require('../src/components/world/roadSurface.ts')
+assert(ASPHALT_HEIGHT < Math.min(...SUPERMARKET_PARKING_SPOTS.map(s => s.position[1])), 'shared asphalt stays below bay markings')
+assert.equal(asphaltMaterial(0).color, asphaltMaterial(1).color, 'rain changes reflectivity without changing asphalt colour between roads')
+assert(asphaltMaterial(1).roughness < asphaltMaterial(0).roughness, 'wet asphalt uses shared surface response')
+for (const index of [SUPERMARKET.accessEntryIndex, SUPERMARKET.accessExitIndex]) {
+  const t = index / (marketRoad.points.length - 1), point = marketCurve.getPoint(t), tangent = marketCurve.getTangent(t)
+  const radius = marketRoad.width / 2 + marketRoad.curbWidth / 2
+  const curbPoint = [point.x + tangent.z * radius, point.z - tangent.x * radius]
+  assert(connectingPavementCovers(marketRoad.id, curbPoint), 'driveway footprint cuts through the actual frontage curb')
+}
+for (const root of [marketRoad.points[0], marketRoad.points.at(-1)]) {
+  assert(connectingPavementCovers(marketRoad.id, root), 'market road overlaps avenue pavement at both junctions')
+  assert(connectingPavementCovers('plc-horizontal', [root[0], -MAIN_ROADS[0].width / 2 - MAIN_ROADS[0].curbWidth / 2]), 'avenue curb is removed where the market road crosses it')
+}
+assert(!connectingPavementCovers(marketRoad.id, [-32, -22.675]), 'frontage curb remains continuous away from driveways')
+console.log('Shared asphalt height and material, actual driveway curb cuts and avenue junctions passed.')

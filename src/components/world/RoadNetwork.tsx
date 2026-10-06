@@ -1,3 +1,4 @@
+import { ASPHALT_HEIGHT, asphaltMaterial, connectingPavementCovers } from './roadSurface'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { CITY_ROADS, MAIN_ROADS, MAIN_MARKING_SEGMENTS, DISTRICTS, SUPERMARKET_DRIVEWAYS, type CityRoadDefinition, type Vec2Point } from './cityLayout'
@@ -54,7 +55,10 @@ function buildShoulderGeometry(road: CityRoadDefinition, innerExtra: number, out
       }
       if (i === count) continue
       const mid = curve.getPointAt((i + 0.5) / count)
-      if (road.accesses?.some(access => access.side === side && Math.hypot(mid.x - access.point[0], mid.z - access.point[1]) < access.width / 2)) continue
+      const midTangent = curve.getTangentAt((i + 0.5) / count)
+      const midHalf = roadWidthAt(road, (i + 0.5) / count) / 2
+      if ([innerExtra, (innerExtra + outerExtra) / 2, outerExtra].some(extra => connectingPavementCovers(road.id,
+        [mid.x - midTangent.z * side * (midHalf + extra), mid.z + midTangent.x * side * (midHalf + extra)]))) continue
       const n = base + i * 2
       if (side === 1) indices.push(n, n + 1, n + 2, n + 1, n + 3, n + 2)
       else indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3)
@@ -66,11 +70,10 @@ function buildShoulderGeometry(road: CityRoadDefinition, innerExtra: number, out
   return geometry
 }
 
-function edgeSegments(road: CityRoadDefinition, points: Vec2Point[], side: -1 | 1) {
+function edgeSegments(road: CityRoadDefinition, points: Vec2Point[]) {
   const result: Vec2Point[][] = [], current: Vec2Point[] = []
   for (const p of points) {
-    // Edges run at half road width; expand the circular mouth by that offset.
-    const blocked = road.accesses?.some(access => access.side === side && Math.hypot(p[0] - access.point[0], p[1] - access.point[1]) < Math.hypot(access.width / 2, road.width * 0.485))
+    const blocked = connectingPavementCovers(road.id, p)
     if (blocked) {
       if (current.length > 1) result.push(current.splice(0))
       else current.length = 0
@@ -92,12 +95,10 @@ function offsetPath(road: CityRoadDefinition, fraction: number): Vec2Point[] {
 function RoadRibbon({
   road,
   rain = 0,
-  color = '#2a3033',
   surface = true,
 }: {
   road: CityRoadDefinition
   rain?: number
-  color?: string
   surface?: boolean
 }) {
   const sidewalkWidth = road.sidewalkWidth ?? 0
@@ -111,7 +112,7 @@ function RoadRibbon({
     [road, curbWidth],
   )
   const roadGeometry = useMemo(
-    () => buildRibbonGeometry(road.points, road.width, 0.028, road.endWidth ?? road.width),
+    () => buildRibbonGeometry(road.points, road.width, ASPHALT_HEIGHT, road.endWidth ?? road.width),
     [road.points, road.width, road.endWidth],
   )
 
@@ -119,21 +120,16 @@ function RoadRibbon({
     <group>
       {sidewalkWidth > 0 && (
         <mesh geometry={sidewalkGeometry}>
-          <meshStandardMaterial color="#9ca3a0" roughness={0.96} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+          <meshStandardMaterial color="#9ca3a0" roughness={0.96} />
         </mesh>
       )}
       {curbWidth > 0 && (
         <mesh geometry={curbGeometry}>
-          <meshStandardMaterial color="#c1c3be" roughness={0.93} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
+          <meshStandardMaterial color="#c1c3be" roughness={0.93} />
         </mesh>
       )}
       {surface && <mesh geometry={roadGeometry}>
-        <meshStandardMaterial
-          color={color}
-          polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3}
-          roughness={Math.max(0.24, 0.9 - rain * 0.54)}
-          metalness={Math.min(0.2, rain * 0.18)}
-        />
+        <meshStandardMaterial {...asphaltMaterial(rain)} />
       </mesh>
       }
     </group>
@@ -192,7 +188,7 @@ function RoadMarkings({ road }: { road: CityRoadDefinition }) {
     const trim = (points: Vec2Point[]) => inset ? points.slice(inset, points.length - inset) : points
     return {
       center: trim(offsetPath(road, 0)),
-      edges: ([-1, 1] as const).flatMap(side => edgeSegments(road, trim(offsetPath(road, side * 0.485)), side)),
+      edges: ([-1, 1] as const).flatMap(side => edgeSegments(road, trim(offsetPath(road, side * 0.485)))),
       dividers: [-0.25, 0.25].map(f => { const points = trim(offsetPath(road, f)); return (road.endWidth ?? road.width) < road.width ? points.slice(0, 85) : points }),
     }
   }, [road])
@@ -397,7 +393,7 @@ export function UrbanRoadNetwork({
         nightFactor={nightFactor}
       />}
 
-      <RoadRibbon road={parkRoad} rain={rain} color="#252c2f" />
+      <RoadRibbon road={parkRoad} rain={rain} />
       <RoadMarkings road={parkRoad} />
       {quality !== 'low' && <>
         <CivicGarden nightFactor={nightFactor} />
