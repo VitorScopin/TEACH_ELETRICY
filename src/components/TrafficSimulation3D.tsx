@@ -16,7 +16,7 @@ import { SupermarketDistrict } from './world/SupermarketDistrict'
 import { CityLife } from './world/CityLife'
 import { BOULEVARD_START, CITY_LIMITS, CITY_BORDER } from './world/cityLayout'
 import { horizontalRoadPose, HORIZONTAL_ROAD_EXIT, WEST_TRAFFIC_SPAWN } from './world/roadGeometry'
-import { trafficSpeedLimit, safeVehicleStep, vehicleSpawnClear, boundedTrafficStep, type VehicleRegistry } from './world/vehicleTraffic'
+import { trafficSpeedLimit, safeVehicleStep, vehicleSpawnClear, boundedTrafficStep, shouldStopForSignal, type VehicleRegistry } from './world/vehicleTraffic'
 import { UrbanRoadNetwork } from './world/RoadNetwork'
 import { Planter, StreetLamp, Tree } from './world/StreetFurniture'
 import {
@@ -505,21 +505,14 @@ function TrafficCars({
         if (front > def.stopProgress + 0.01) car.clearedStopLine = true
         const hasEnteredIntersection = car.clearedStopLine || front > -TRAFFIC_WORLD.intersectionHalf
         const distanceToStopLine = def.stopProgress - front
-        const comfortableStoppingDistance =
-          (car.speed * car.speed) / (2 * 3.8) + 0.9
-
-        // Red and invalid/all-off states always demand a stop. On yellow, use a
-        // dilemma zone: cars that can stop comfortably do so; cars already too
-        // close continue through instead of emergency-braking on the crosswalk.
-        const yellowCanStop =
-          signal.yellow &&
-          !signal.green &&
-          distanceToStopLine > comfortableStoppingDistance
-        const signalDemandsStop =
-          signal.red ||
-          (!signal.green && !signal.yellow) ||
-          yellowCanStop
-        const mustStopForSignal = signalDemandsStop && !hasEnteredIntersection
+        const mustStopForSignal = shouldStopForSignal({
+          red: signal.red,
+          yellow: signal.yellow,
+          green: signal.green,
+          speed: car.speed,
+          distanceToStopLine,
+          hasEnteredIntersection,
+        })
 
         let targetFront = Number.POSITIVE_INFINITY
 
