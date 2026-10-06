@@ -1,7 +1,7 @@
 import { useGLTF } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import * as THREE from 'three'
-import { SUPERMARKET_PARKING_SPOTS } from './cityLayout'
+import { ROUNDABOUT, SUPERMARKET_PARKING_SPOTS } from './cityLayout'
 import { Bench, BusStop, Planter, StreetLamp, TrashBin, Tree } from './StreetFurniture'
 
 type Quality = 'low' | 'medium' | 'high'
@@ -335,68 +335,84 @@ function RoundaboutDistrict({
   rain: number
   nightFactor: number
 }) {
-  const centerX = 21.5
-  const centerZ = -14.5
-  const radius = 5.8
+  const [centerX, centerZ] = ROUNDABOUT.center
+  const islandRadius = ROUNDABOUT.islandRadius
+  const laneRadius = ROUNDABOUT.laneRadius
+  const outerRadius = ROUNDABOUT.roadOuterRadius
 
   return (
     <group>
-      <mesh position={[11.2, 0.055, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[9.4, 6.8]} />
-        <meshStandardMaterial color="#242b2e" roughness={0.88} />
-      </mesh>
-      <mesh position={[centerX, 0.052, -23.5]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[6.8, 9.5]} />
-        <meshStandardMaterial color="#242b2e" roughness={0.88} />
-      </mesh>
-      <mesh position={[30.6, 0.052, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[8.6, 6.8]} />
-        <meshStandardMaterial color="#242b2e" roughness={0.88} />
-      </mesh>
-
+      {/* The circle is now a real road node fed by RoadNetwork approaches. */}
       <mesh position={[centerX, 0.055, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[4.05, radius + 1.8, 48]} />
-        <meshStandardMaterial color="#242b2e" roughness={0.88} />
+        <ringGeometry args={[islandRadius + 0.35, outerRadius, 64]} />
+        <meshStandardMaterial
+          color="#242b2e"
+          roughness={Math.max(0.28, 0.88 - rain * 0.48)}
+          metalness={Math.min(0.18, rain * 0.16)}
+        />
       </mesh>
-      <WetOverlay position={[centerX, 0.075, centerZ]} size={[16, 16]} rain={rain} />
 
-      <mesh position={[centerX, 0.20, centerZ]}>
-        <cylinderGeometry args={[3.8, 3.95, 0.38, 36]} />
-        <meshStandardMaterial color="#2d4935" roughness={1} />
+      <mesh position={[centerX, 0.18, centerZ]}>
+        <cylinderGeometry args={[islandRadius, islandRadius + 0.14, 0.36, 48]} />
+        <meshStandardMaterial color="#84908a" roughness={0.92} />
       </mesh>
-      <mesh position={[centerX, 0.42, centerZ]}>
-        <cylinderGeometry args={[3.15, 3.4, 0.2, 32]} />
+      <mesh position={[centerX, 0.40, centerZ]}>
+        <cylinderGeometry args={[islandRadius - 0.40, islandRadius - 0.28, 0.22, 48]} />
         <meshStandardMaterial color="#355b3f" roughness={1} />
       </mesh>
 
-      <Tree position={[centerX, 0.42, centerZ]} scale={1.1} />
-      <Tree position={[centerX - 1.8, 0.42, centerZ + 0.8]} scale={0.55} />
-      <Tree position={[centerX + 1.8, 0.42, centerZ - 0.8]} scale={0.55} />
+      <Tree position={[centerX, 0.42, centerZ]} scale={1.05} />
+      <Tree position={[centerX - 1.7, 0.42, centerZ + 0.75]} scale={0.50} />
+      <Tree position={[centerX + 1.7, 0.42, centerZ - 0.75]} scale={0.50} />
 
-      {Array.from({ length: 16 }).map((_, index) => {
-        const angle = (index / 16) * Math.PI * 2
+      {/* Circular lane markers. */}
+      {Array.from({ length: 20 }).map((_, index) => {
+        const angle = (index / 20) * Math.PI * 2
         return (
           <mesh
             key={index}
             position={[
-              centerX + Math.cos(angle) * (radius + 0.6),
+              centerX + Math.cos(angle) * laneRadius,
               0.09,
-              centerZ + Math.sin(angle) * (radius + 0.6),
+              centerZ + Math.sin(angle) * laneRadius,
             ]}
             rotation={[-Math.PI / 2, 0, -angle]}
           >
-            <planeGeometry args={[1.1, 0.08]} />
+            <planeGeometry args={[1.0, 0.08]} />
             <meshBasicMaterial color="#eeeeea" toneMapped={false} />
           </mesh>
         )
       })}
 
-      <YieldMark position={[14.5, 0.205, -14.5]} rotationY={Math.PI / 2} />
-      <YieldMark position={[21.5, 0.205, -22.0]} rotationY={0} />
-      <YieldMark position={[28.7, 0.205, -14.5]} rotationY={-Math.PI / 2} />
+      <YieldMark
+        position={[ROUNDABOUT.entryWest[0] - 0.75, 0.205, ROUNDABOUT.entryWest[1]]}
+        rotationY={Math.PI / 2}
+      />
+      <YieldMark
+        position={[ROUNDABOUT.entryNorth[0], 0.205, ROUNDABOUT.entryNorth[1] + 0.75]}
+        rotationY={0}
+      />
+      <YieldMark
+        position={[ROUNDABOUT.entryEast[0] + 0.75, 0.205, ROUNDABOUT.entryEast[1]]}
+        rotationY={-Math.PI / 2}
+      />
+      <YieldMark
+        position={[ROUNDABOUT.entrySouth[0], 0.205, ROUNDABOUT.entrySouth[1] - 0.75]}
+        rotationY={Math.PI}
+      />
 
-      <StreetLamp position={[13.4, 0.2, -21.7]} nightFactor={nightFactor} />
-      <StreetLamp position={[29.5, 0.2, -21.7]} nightFactor={nightFactor} />
+      <StreetLamp
+        position={[centerX - outerRadius - 1.7, 0.2, centerZ - outerRadius + 0.8]}
+        nightFactor={nightFactor}
+      />
+      <StreetLamp
+        position={[centerX + outerRadius + 1.7, 0.2, centerZ - outerRadius + 0.8]}
+        nightFactor={nightFactor}
+      />
+      <StreetLamp
+        position={[centerX + outerRadius - 0.8, 0.2, centerZ + outerRadius + 1.7]}
+        nightFactor={nightFactor}
+      />
     </group>
   )
 }
@@ -511,7 +527,7 @@ const CITY_FRAME_BUILDINGS: Array<{
   { variant: 'small', position: [-8.8, 0.18, -35.6], rotationY: Math.PI, scale: 0.86 },
   { variant: 'small', position: [10.0, 0.18, -35.8], rotationY: Math.PI, scale: 0.86 },
   { variant: 'medium', position: [20.0, 0.18, -36.0], rotationY: Math.PI, scale: 0.84 },
-  { variant: 'large', position: [31.0, 0.18, -36.2], rotationY: Math.PI, scale: 0.88 },
+  { variant: 'large', position: [27.0, 0.18, -45.0], rotationY: Math.PI, scale: 0.82 },
   { variant: 'small', position: [-42.0, 0.18, -14.0], rotationY: Math.PI / 2, scale: 0.82 },
   { variant: 'medium', position: [-42.0, 0.18, 6.0], rotationY: Math.PI / 2, scale: 0.82 },
   { variant: 'small', position: [42.0, 0.18, -4.0], rotationY: -Math.PI / 2, scale: 0.84 },
