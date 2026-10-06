@@ -7,6 +7,58 @@ export type VehiclePose = { position: [number, number, number]; rotationY: numbe
 export type VehicleActor = { group: Group; length: number; width: number; order: number }
 export type VehicleRegistry = MutableRefObject<Map<string, VehicleActor>>
 
+const FOLLOWING_MIN_GAP = 2.4
+const FOLLOWING_TIME_HEADWAY = 0.72
+const FOLLOWING_LOOKAHEAD = 18
+
+function actorSpeed(actor: VehicleActor) {
+  const speed = actor.group.userData.trafficSpeed
+  return typeof speed === 'number' && Number.isFinite(speed) ? Math.max(0, speed) : 0
+}
+
+export function desiredFollowingGap(speed: number) {
+  return FOLLOWING_MIN_GAP + Math.max(0, speed) * FOLLOWING_TIME_HEADWAY
+}
+
+function followingSpeedLimit(
+  self: VehicleActor,
+  other: VehicleActor,
+  forwardDistance: number,
+  desiredSpeed: number,
+) {
+  const bumperGap =
+    forwardDistance - (self.length + other.length) / 2
+
+  if (bumperGap <= 0.35) return 0
+
+  const selfSpeed = actorSpeed(self)
+  const leaderSpeed = actorSpeed(other)
+  const wantedGap = desiredFollowingGap(
+    selfSpeed > 0.1 ? selfSpeed : desiredSpeed,
+  )
+
+  // Far enough away: no car-following restriction.
+  if (bumperGap >= wantedGap + 2.2) return desiredSpeed
+
+  // Match the leader before entering the comfort gap. The extra term allows
+  // a gentle catch-up when the gap is healthy, while reducing speed early as
+  // the follower approaches the desired headway.
+  const gapError = bumperGap - wantedGap
+  const catchUpAllowance = THREE.MathUtils.clamp(gapError * 0.85, -3.4, 2.0)
+  const matchedSpeed = Math.max(0, leaderSpeed + catchUpAllowance)
+
+  if (bumperGap < FOLLOWING_MIN_GAP) {
+    const emergencyScale = THREE.MathUtils.clamp(
+      (bumperGap - 0.35) / (FOLLOWING_MIN_GAP - 0.35),
+      0,
+      1,
+    )
+    return Math.min(matchedSpeed, desiredSpeed * emergencyScale)
+  }
+
+  return Math.min(desiredSpeed, matchedSpeed)
+}
+
 export function vehicleBodiesOverlap(a: VehiclePose, length: number, width: number, b: VehiclePose, otherLength: number, otherWidth: number, margin = 0.25) {
   return vehicleOverlapDepth(a, length, width, b, otherLength, otherWidth, margin) > 0
 }
@@ -267,10 +319,19 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
     const lateral = Math.abs(
       dx * (-forwardZ) + dz * forwardX,
     )
+    const headingAlignment = Math.cos(now.rotationY - pose.rotationY)
     const following =
       forward > 0 &&
-      lateral < 2.65 &&
-      Math.cos(now.rotationY - pose.rotationY) > 0.35
+      forward < FOLLOWING_LOOKAHEAD &&
+      lateral < 2.45 &&
+      headingAlignment > 0.58
+
+    if (following) {
+      limit = Math.min(
+        limit,
+        followingSpeedLimit(self, other, forward, desiredSpeed),
+      )
+    }
 
     const circleGap =
       selfRoundabout.circulating && otherRoundabout.circulating
