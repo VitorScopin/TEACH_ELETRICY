@@ -324,6 +324,8 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
 }) {
   const ref = useRef<THREE.Group>(null)
   const elapsed = useRef(0), progress = useRef(0), speed = useRef(0)
+  const cycle = useRef(0)
+  const delayTarget = useRef(delay)
   const length = useMemo(() => curve.getLength(), [curve])
   const poseAt = (distance: number) => {
     const t = THREE.MathUtils.clamp((progress.current + distance) / length, 0, 1)
@@ -339,7 +341,7 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
     if (!running || !group) return
     const delta = Math.min(deltaRaw, 0.05)
     elapsed.current += delta
-    if (elapsed.current < delay) { group.visible = false; group.userData.trafficActive = false; return }
+    if (elapsed.current < delayTarget.current) { group.visible = false; group.userData.trafficActive = false; return }
     if (!group.userData.trafficActive) {
       const pose = poseAt(0)
       group.position.set(...pose.position); group.rotation.y = pose.rotationY
@@ -355,7 +357,14 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
     applyCurveTransform(group, curve, progress.current / length)
     updateVehicleVisuals(group, speed.current, delta, target < speed.current - 0.1)
     if (progress.current >= length) {
-      progress.current = 0; elapsed.current = 0; speed.current = 0; group.visible = false; group.userData.trafficActive = false
+      progress.current = 0
+      elapsed.current = 0
+      speed.current = 0
+      cycle.current += 1
+      delayTarget.current =
+        delay * (0.76 + ((order + cycle.current * 3) % 6) * 0.09)
+      group.visible = false
+      group.userData.trafficActive = false
     }
   })
   return <group ref={ref} visible={false}><Suspense fallback={null}><RealisticCarModel variant={variant} color={color} /></Suspense></group>
