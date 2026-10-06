@@ -247,11 +247,15 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
       }
     }
 
-    const forward =
-      dx * Math.cos(now.rotationY) -
-      dz * Math.sin(now.rotationY)
+    const forwardX = Math.cos(now.rotationY)
+    const forwardZ = -Math.sin(now.rotationY)
+    const forward = dx * forwardX + dz * forwardZ
+    const lateral = Math.abs(
+      dx * (-forwardZ) + dz * forwardX,
+    )
     const following =
       forward > 0 &&
+      lateral < 2.65 &&
       Math.cos(now.rotationY - pose.rotationY) > 0.35
 
     const circleGap =
