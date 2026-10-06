@@ -261,6 +261,29 @@ assert(
   'approaching traffic slows before occupied roundabout',
 )
 
+// A circulating vehicle must not mistake a waiting approach vehicle for a
+// leader in its own lane. Otherwise both vehicles yield to each other.
+const circulatingGroup = actor(circulatingPose, 1)
+const waitingApproach = actor(westApproachPose, 2)
+const circleFollowerRegistry = {
+  current: new Map([
+    ['circle-self', circulatingGroup],
+    ['entry-waiting', waitingApproach],
+  ]),
+}
+const circleFuture = distance => {
+  const angle = circulatingAngle - distance / ROUNDABOUT.laneRadius
+  return pose(
+    ROUNDABOUT.center[0] + Math.cos(angle) * ROUNDABOUT.laneRadius,
+    ROUNDABOUT.center[1] + Math.sin(angle) * ROUNDABOUT.laneRadius,
+    Math.PI / 2 - angle,
+  )
+}
+assert(
+  trafficSpeedLimit(circleFollowerRegistry, 'circle-self', circleFuture, 4.5) > 3.2,
+  'circulating vehicle is not blocked by a car waiting on an approach',
+)
+
 // Simultaneous entries use deterministic priority so two approaches do not charge the circle together.
 const northApproachPose = pose(ROUNDABOUT.center[0], -43, -Math.PI / 2)
 const simultaneousRegistry = {
