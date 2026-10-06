@@ -58,6 +58,39 @@ function roundaboutYieldSpeed(clearance: number) {
   return Math.sqrt(2 * 3.2 * Math.max(0, clearance))
 }
 
+function crossingConflictDistance(a: VehiclePose, b: VehiclePose) {
+  const ax = Math.cos(a.rotationY)
+  const az = -Math.sin(a.rotationY)
+  const bx = Math.cos(b.rotationY)
+  const bz = -Math.sin(b.rotationY)
+  const cross = ax * bz - az * bx
+
+  // Parallel / same-road traffic is handled by following and footprint checks.
+  if (Math.abs(cross) < 0.38) return null
+
+  const dx = b.position[0] - a.position[0]
+  const dz = b.position[2] - a.position[2]
+  const selfDistance = (dx * bz - dz * bx) / cross
+  const otherDistance = (dx * az - dz * ax) / cross
+
+  if (
+    selfDistance <= 0 ||
+    selfDistance > 16 ||
+    otherDistance < -1.5 ||
+    otherDistance > 16
+  ) {
+    return null
+  }
+
+  return selfDistance
+}
+
+function junctionYieldSpeed(distance: number) {
+  const clearance = Math.max(0, distance - 3.1)
+  if (clearance <= 0.12) return 0
+  return Math.sqrt(2 * 3.1 * clearance)
+}
+
 export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtDistance: (distance: number) => VehiclePose, desiredSpeed: number) {
   const self = registry.current.get(id)
   if (!self) return desiredSpeed
@@ -98,6 +131,22 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
     }
 
     if (separation > 22) continue
+
+    // At ordinary junctions, calculate the intersection of the two local
+    // heading rays. This lets the lower-priority vehicle brake before the
+    // conflict point instead of relying on last-second body overlap.
+    if (
+      other.order < self.order &&
+      !selfRoundabout.approaching &&
+      !selfRoundabout.circulating &&
+      !otherRoundabout.approaching &&
+      !otherRoundabout.circulating
+    ) {
+      const conflictDistance = crossingConflictDistance(now, pose)
+      if (conflictDistance !== null) {
+        limit = Math.min(limit, junctionYieldSpeed(conflictDistance))
+      }
+    }
 
     const forward =
       dx * Math.cos(now.rotationY) -
