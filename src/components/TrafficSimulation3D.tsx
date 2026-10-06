@@ -589,7 +589,7 @@ function horizontalRoadPose(
   const t =
     (-transition - progress) /
     (-transition - TRAFFIC_WORLD.spawnX)
-  return boulevardPose(1 - t, laneOffset, true)
+  return boulevardPose(t, laneOffset, true)
 }
 
 const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
