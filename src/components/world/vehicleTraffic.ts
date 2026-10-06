@@ -50,56 +50,198 @@ export function desiredFollowingGap(speed: number) {
   return 2.35 + Math.max(0, speed) * 0.55
 }
 
-function circulating(pose: VehiclePose) {
-  const dx = pose.position[0] - ROUNDABOUT.center[0], dz = pose.position[2] - ROUNDABOUT.center[1]
-  const radius = Math.hypot(dx, dz)
-  return radius > ROUNDABOUT.islandRadius + 0.7 && radius < ROUNDABOUT.roadOuterRadius + 0.2 &&
-    Math.abs((dx * Math.cos(pose.rotationY) - dz * Math.sin(pose.rotationY)) / radius) < 0.65
+function roundaboutState(pose: VehiclePose) {
+  const dx = pose.position[0] - ROUNDABOUT.center[0]
+  const dz = pose.position[2] - ROUNDABOUT.center[1]
+  const radius = Math.max(0.001, Math.hypot(dx, dz))
+  const angle = Math.atan2(dz, dx)
+  const forwardX = Math.cos(pose.rotationY)
+  const forwardZ = -Math.sin(pose.rotationY)
+
+  const radialDot = (forwardX * dx + forwardZ * dz) / radius
+  const tangentX = -dz / radius
+  const tangentZ = dx / radius
+  const tangentialAlignment = Math.abs(forwardX * tangentX + forwardZ * tangentZ)
+
+  const circulating =
+    radius > ROUNDABOUT.islandRadius + 0.75 &&
+    radius < ROUNDABOUT.roadOuterRadius + 0.75 &&
+    tangentialAlignment > 0.56
+
+  const approaching =
+    radius >= ROUNDABOUT.roadOuterRadius - 0.15 &&
+    radius < ROUNDABOUT.roadOuterRadius + 12 &&
+    radialDot < -0.16
+
+  // Once the centre has crossed the give-way line, do not stop it mid-merge.
+  const committed =
+    radius > ROUNDABOUT.islandRadius + 0.75 &&
+    radius < ROUNDABOUT.roadOuterRadius + 0.95
+
+  return { radius, angle, circulating, approaching, committed }
 }
 
-export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtDistance: (distance: number) => VehiclePose, desiredSpeed: number) {
+function clockwiseArcGap(fromAngle: number, toAngle: number) {
+  let gap = fromAngle - toAngle
+  while (gap < 0) gap += Math.PI * 2
+  while (gap >= Math.PI * 2) gap -= Math.PI * 2
+  return gap
+}
+
+function roundaboutYieldSpeed(clearance: number) {
+  if (clearance <= 0.15) return 0
+  return Math.sqrt(2 * 3.1 * clearance)
+}
+
+export function trafficSpeedLimit(
+  registry: VehicleRegistry,
+  id: string,
+  poseAtDistance: (distance: number) => VehiclePose,
+  desiredSpeed: number,
+) {
   const self = registry.current.get(id)
   if (!self) return desiredSpeed
+
   const now = poseAtDistance(0)
+  const selfRoundabout = roundaboutState(now)
   let limit = desiredSpeed
+
   for (const [otherId, other] of registry.current) {
     if (otherId === id || !actorActive(other)) continue
+
     const pose = actorPose(other)
     const dx = pose.position[0] - now.position[0]
     const dz = pose.position[2] - now.position[2]
-    if (Math.hypot(dx, dz) > 16) continue
+    const separation = Math.hypot(dx, dz)
+    if (separation > 20) continue
+
+    const otherRoundabout = roundaboutState(pose)
+
+    // ROUNDABOUT RULE 1:
+    // A car already circulating owns the lane. An approaching car only yields
+    // when the circulating vehicle is actually coming toward THIS entry.
+    if (
+      selfRoundabout.approaching &&
+      !selfRoundabout.committed &&
+      otherRoundabout.circulating
+    ) {
+      const arcToEntry =
+        clockwiseArcGap(otherRoundabout.angle, selfRoundabout.angle) *
+        ROUNDABOUT.laneRadius
+
+      if (arcToEntry < 14) {
+        const clearance = Math.max(
+          0,
+          selfRoundabout.radius - ROUNDABOUT.roadOuterRadius - 2.65,
+        )
+        limit = Math.min(limit, roundaboutYieldSpeed(clearance))
+      }
+    }
+
+    // ROUNDABOUT RULE 2:
+    // If another vehicle has already crossed its give-way line, let it finish
+    // entering instead of challenging it halfway through the merge.
+    if (
+      selfRoundabout.approaching &&
+      !selfRoundabout.committed &&
+      otherRoundabout.committed &&
+      separation < 13
+    ) {
+      const clearance = Math.max(
+        0,
+        selfRoundabout.radius - ROUNDABOUT.roadOuterRadius - 2.65,
+      )
+      limit = Math.min(limit, roundaboutYieldSpeed(clearance))
+    }
+
+    // ROUNDABOUT RULE 3:
+    // Two approaches arriving together use one deterministic order so they do
+    // not both decide to enter at the same instant.
+    if (
+      selfRoundabout.approaching &&
+      !selfRoundabout.committed &&
+      otherRoundabout.approaching &&
+      !otherRoundabout.committed &&
+      separation < 16 &&
+      other.order < self.order
+    ) {
+      const clearance = Math.max(
+        0,
+        selfRoundabout.radius - ROUNDABOUT.roadOuterRadius - 2.65,
+      )
+      limit = Math.min(limit, roundaboutYieldSpeed(clearance))
+    }
 
     const forwardX = Math.cos(now.rotationY)
     const forwardZ = -Math.sin(now.rotationY)
     const forward = dx * forwardX + dz * forwardZ
     const lateral = Math.abs(dx * (-forwardZ) + dz * forwardX)
     const headingAlignment = Math.cos(now.rotationY - pose.rotationY)
-    const following = forward > 0 && lateral < 2.35 && headingAlignment > 0.62
+    const following =
+      forward > 0 &&
+      lateral < 2.35 &&
+      headingAlignment > 0.62
 
     if (following) {
       const bumperGap = forward - (self.length + other.length) / 2
       const wantedGap = desiredFollowingGap(actorSpeed(self) || desiredSpeed)
+
       if (bumperGap <= 0.4) {
         limit = 0
       } else if (bumperGap < wantedGap + 3) {
         const leaderSpeed = actorSpeed(other)
-        const correction = Math.max(-leaderSpeed, Math.min(1.8, (bumperGap - wantedGap) * 0.9))
+        const correction = Math.max(
+          -leaderSpeed,
+          Math.min(1.8, (bumperGap - wantedGap) * 0.9),
+        )
         limit = Math.min(limit, Math.max(0, leaderSpeed + correction))
       }
     }
 
-    const selfCircle = circulating(now), otherCircle = circulating(pose)
-    const yieldToOther = following || (otherCircle && !selfCircle) ||
-      (selfCircle && otherCircle && forward > 0) ||
-      (!selfCircle && !otherCircle && otherHasPriority(self, other))
+    const circleFollowing =
+      selfRoundabout.circulating &&
+      otherRoundabout.circulating &&
+      clockwiseArcGap(selfRoundabout.angle, otherRoundabout.angle) *
+        ROUNDABOUT.laneRadius <
+        12
+
+    const genericYield =
+      !selfRoundabout.approaching &&
+      !selfRoundabout.circulating &&
+      !selfRoundabout.committed &&
+      !otherRoundabout.approaching &&
+      !otherRoundabout.circulating &&
+      !otherRoundabout.committed &&
+      otherHasPriority(self, other)
+
+    const yieldToOther =
+      following ||
+      circleFollowing ||
+      genericYield
+
     if (!yieldToOther) continue
-    for (const distance of [1.5, 3, 6]) {
-      if (vehicleBodiesOverlap(poseAtDistance(distance), self.length, self.width, pose, other.length, other.width, 0.6)) {
-        limit = Math.min(limit, Math.sqrt(2 * 4 * Math.max(0, distance - 1.3)))
+
+    for (const distance of [1.5, 3, 5.5, 8]) {
+      if (
+        vehicleBodiesOverlap(
+          poseAtDistance(distance),
+          self.length,
+          self.width,
+          pose,
+          other.length,
+          other.width,
+          0.65,
+        )
+      ) {
+        limit = Math.min(
+          limit,
+          Math.sqrt(2 * 3.6 * Math.max(0, distance - 1.45)),
+        )
         break
       }
     }
   }
+
   return limit
 }
 
