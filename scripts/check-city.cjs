@@ -207,6 +207,17 @@ assert.equal(boundedTrafficStep(-10, 4.82, 8, 1, -9), 0, 'queue constraint never
 registry.current.set('leader', actor(pose(0, -1.75, Math.PI), 2))
 assert.equal(trafficSpeedLimit(registry, 'self', future, 8), 8, 'opposite lane stays independent')
 assert.equal(safeVehicleStep(registry, 'self', 5, future), 5, 'opposite lane does not block travel')
+
+// Secondary-road crossing: the higher-order vehicle should brake before the
+// geometric conflict point instead of entering the junction and stopping there.
+const crossingSelf = actor(pose(-6, 0, 0), 20)
+const crossingOther = actor(pose(0, -6, -Math.PI / 2), 5)
+const crossingRegistry = { current: new Map([['cross-self', crossingSelf], ['cross-other', crossingOther]]) }
+const crossingFuture = distance => pose(-6 + distance, 0, 0)
+assert(
+  trafficSpeedLimit(crossingRegistry, 'cross-self', crossingFuture, 8) < 6,
+  'lower-priority vehicle slows before perpendicular conflict point',
+)
 assert(!vehicleBodiesOverlap(pose(0), 4.82, 1.9, pose(0, -1.75, Math.PI), 4.82, 1.9))
 
 // Roundabout approach must yield early to circulating traffic, not only at collision distance.
