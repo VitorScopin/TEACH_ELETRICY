@@ -315,48 +315,34 @@ type CityBuilding = {
   position: [number, number, number]
   rotationY?: number
   scale?: number
-  district: 'nw' | 'ne' | 'sw' | 'se' | 'outer'
 }
 
-const CITY_BUILDINGS: CityBuilding[] = [
-  // NOROESTE — frente urbana contínua voltada para a avenida
-  { district: 'nw', variant: 'large',  position: [-26.0, 0.18, -17.0], rotationY: 0, scale: 0.90 },
-  { district: 'nw', variant: 'medium', position: [-17.2, 0.18, -16.8], rotationY: 0, scale: 0.82 },
-  { district: 'nw', variant: 'small',  position: [-10.3, 0.18, -16.5], rotationY: 0, scale: 0.82 },
-  { district: 'nw', variant: 'medium', position: [-25.0, 0.18, -10.5], rotationY: Math.PI / 2, scale: 0.76 },
+const CITY_FRAME_BUILDINGS: CityBuilding[] = [
+  { variant: 'medium', position: [-31.0, 0.18, 17.5], rotationY: Math.PI, scale: 0.82 },
+  { variant: 'small', position: [-22.5, 0.18, 17.4], rotationY: Math.PI, scale: 0.84 },
+  { variant: 'medium', position: [-13.8, 0.18, 17.2], rotationY: Math.PI, scale: 0.80 },
 
-  // NORDESTE — área mais vertical/densa, como centro comercial
-  { district: 'ne', variant: 'small',  position: [10.4, 0.18, -16.4], rotationY: 0, scale: 0.84 },
-  { district: 'ne', variant: 'large',  position: [19.0, 0.18, -17.2], rotationY: 0, scale: 0.92 },
-  { district: 'ne', variant: 'medium', position: [27.4, 0.18, -16.7], rotationY: 0, scale: 0.80 },
-  { district: 'ne', variant: 'medium', position: [26.0, 0.18, -10.3], rotationY: -Math.PI / 2, scale: 0.74 },
+  { variant: 'large', position: [12.0, 0.18, 18.2], rotationY: Math.PI, scale: 0.86 },
+  { variant: 'medium', position: [21.0, 0.18, 17.8], rotationY: Math.PI, scale: 0.80 },
+  { variant: 'small', position: [29.0, 0.18, 17.3], rotationY: Math.PI, scale: 0.82 },
 
-  // SUDOESTE — quarteirão mais aberto, com espaço para praça/estacionamento
-  { district: 'sw', variant: 'medium', position: [-26.0, 0.18, 16.8], rotationY: Math.PI, scale: 0.82 },
-  { district: 'sw', variant: 'small',  position: [-17.4, 0.18, 16.4], rotationY: Math.PI, scale: 0.82 },
-  { district: 'sw', variant: 'medium', position: [-10.4, 0.18, 16.7], rotationY: Math.PI, scale: 0.74 },
+  { variant: 'medium', position: [-31.0, 0.18, -35.8], rotationY: Math.PI, scale: 0.84 },
+  { variant: 'large', position: [-19.5, 0.18, -36.2], rotationY: Math.PI, scale: 0.88 },
+  { variant: 'small', position: [-8.8, 0.18, -35.6], rotationY: Math.PI, scale: 0.86 },
+  { variant: 'small', position: [10.0, 0.18, -35.8], rotationY: Math.PI, scale: 0.86 },
+  { variant: 'medium', position: [20.0, 0.18, -36.0], rotationY: Math.PI, scale: 0.84 },
+  { variant: 'large', position: [31.0, 0.18, -36.2], rotationY: Math.PI, scale: 0.88 },
 
-  // SUDESTE — uso misto, com edifícios maiores nas esquinas
-  { district: 'se', variant: 'large',  position: [10.8, 0.18, 16.9], rotationY: Math.PI, scale: 0.88 },
-  { district: 'se', variant: 'medium', position: [20.0, 0.18, 16.6], rotationY: Math.PI, scale: 0.80 },
-  { district: 'se', variant: 'small',  position: [27.2, 0.18, 16.5], rotationY: Math.PI, scale: 0.82 },
-  { district: 'se', variant: 'medium', position: [26.0, 0.18, 10.4], rotationY: -Math.PI / 2, scale: 0.72 },
-
-  // SEGUNDA LINHA URBANA — só em qualidade alta, preenchendo o horizonte sem poluir o cruzamento
-  { district: 'outer', variant: 'medium', position: [-27.0, 0.18, -36.0], rotationY: Math.PI, scale: 0.88 },
-  { district: 'outer', variant: 'large',  position: [-16.0, 0.18, -36.2], rotationY: Math.PI, scale: 0.90 },
-  { district: 'outer', variant: 'small',  position: [15.5, 0.18, -35.8], rotationY: Math.PI, scale: 0.90 },
-  { district: 'outer', variant: 'medium', position: [26.5, 0.18, -36.0], rotationY: Math.PI, scale: 0.88 },
-  { district: 'outer', variant: 'small',  position: [-27.0, 0.18, 35.8], rotationY: 0, scale: 0.88 },
-  { district: 'outer', variant: 'medium', position: [-16.2, 0.18, 36.0], rotationY: 0, scale: 0.86 },
-  { district: 'outer', variant: 'large',  position: [16.5, 0.18, 36.2], rotationY: 0, scale: 0.90 },
-  { district: 'outer', variant: 'medium', position: [27.0, 0.18, 35.8], rotationY: 0, scale: 0.86 },
+  { variant: 'small', position: [-42.0, 0.18, -14.0], rotationY: Math.PI / 2, scale: 0.82 },
+  { variant: 'medium', position: [-42.0, 0.18, 6.0], rotationY: Math.PI / 2, scale: 0.82 },
+  { variant: 'small', position: [42.0, 0.18, -4.0], rotationY: -Math.PI / 2, scale: 0.84 },
+  { variant: 'medium', position: [42.0, 0.18, 14.0], rotationY: -Math.PI / 2, scale: 0.82 },
 ]
 
 function CityBlockPad({
   position,
   size,
-  tone = '#596064',
+  tone = '#62686a',
 }: {
   position: [number, number, number]
   size: [number, number]
@@ -370,40 +356,299 @@ function CityBlockPad({
       </mesh>
       <mesh position={[0, 0.165, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[size[0] - 0.5, size[1] - 0.5]} />
-        <meshBasicMaterial color="#656b6d" transparent opacity={0.22} />
+        <meshBasicMaterial color="#858b8b" transparent opacity={0.14} />
       </mesh>
     </group>
   )
 }
 
-function ParkingLot() {
-  const lines = [-3.6, -1.8, 0, 1.8, 3.6]
+function useSignTexture(text: string, accent: string, width = 768, height = 180) {
+  return useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    ctx.fillStyle = '#15222a'
+    ctx.fillRect(0, 0, width, height)
+    ctx.fillStyle = accent
+    ctx.fillRect(0, height - 18, width, 18)
+    ctx.font = '700 72px Arial'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(text, width / 2, height / 2 - 4)
+
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.anisotropy = 4
+    return texture
+  }, [text, accent, width, height])
+}
+
+function SupermarketBuilding() {
+  const sign = useSignTexture('SUPERMERCADO', '#ef3d36')
+
   return (
-    <group position={[-19.5, 0.19, 10.6]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[11, 5.2]} />
-        <meshStandardMaterial color="#343a3d" roughness={0.92} />
+    <group position={[-21.5, 0.18, -18.2]}>
+      <mesh position={[0, 2.25, 0]}>
+        <boxGeometry args={[18.5, 4.5, 6.2]} />
+        <meshStandardMaterial color="#d8d8d3" roughness={0.72} />
       </mesh>
-      {lines.map((x) => (
-        <mesh key={x} position={[x, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[0.055, 4.2]} />
-          <meshBasicMaterial color="#d6d2b9" transparent opacity={0.72} />
+
+      <mesh position={[0, 2.55, 3.13]}>
+        <planeGeometry args={[12.8, 3.0]} />
+        <meshStandardMaterial color="#8ec6d3" emissive="#2e6571" emissiveIntensity={0.28} roughness={0.22} metalness={0.08} />
+      </mesh>
+
+      <mesh position={[0, 4.25, 3.18]}>
+        <planeGeometry args={[14.5, 2.2]} />
+        <meshBasicMaterial map={sign ?? undefined} color={sign ? '#ffffff' : '#ef3d36'} toneMapped={false} />
+      </mesh>
+
+      <mesh position={[0, 4.62, 0]}>
+        <boxGeometry args={[19.2, 0.3, 6.8]} />
+        <meshStandardMaterial color="#30383d" roughness={0.82} />
+      </mesh>
+
+      {[-6.8, -2.2, 2.2, 6.8].map((x) => (
+        <mesh key={x} position={[x, 4.95, -1.1]}>
+          <boxGeometry args={[1.4, 0.42, 1.5]} />
+          <meshStandardMaterial color="#555d61" roughness={0.8} />
         </mesh>
       ))}
+
+      <mesh position={[-4.4, 1.35, 3.2]}>
+        <boxGeometry args={[2.7, 2.25, 0.18]} />
+        <meshStandardMaterial color="#bfe6f1" emissive="#58a7bd" emissiveIntensity={0.45} roughness={0.18} />
+      </mesh>
+      <mesh position={[0, 1.35, 3.2]}>
+        <boxGeometry args={[2.7, 2.25, 0.18]} />
+        <meshStandardMaterial color="#bfe6f1" emissive="#58a7bd" emissiveIntensity={0.45} roughness={0.18} />
+      </mesh>
+      <mesh position={[4.4, 1.35, 3.2]}>
+        <boxGeometry args={[2.7, 2.25, 0.18]} />
+        <meshStandardMaterial color="#bfe6f1" emissive="#58a7bd" emissiveIntensity={0.45} roughness={0.18} />
+      </mesh>
     </group>
   )
 }
 
-function PocketSquare() {
+const SUPERMARKET_PARKING_SPOTS: Array<{
+  position: [number, number, number]
+  rotationY: number
+}> = [
+  { position: [-28.0, 0.23, -10.6], rotationY: Math.PI / 2 },
+  { position: [-24.8, 0.23, -10.6], rotationY: Math.PI / 2 },
+  { position: [-21.6, 0.23, -10.6], rotationY: Math.PI / 2 },
+  { position: [-18.4, 0.23, -10.6], rotationY: Math.PI / 2 },
+  { position: [-15.2, 0.23, -10.6], rotationY: Math.PI / 2 },
+  { position: [-28.0, 0.23, -13.6], rotationY: -Math.PI / 2 },
+  { position: [-24.8, 0.23, -13.6], rotationY: -Math.PI / 2 },
+  { position: [-21.6, 0.23, -13.6], rotationY: -Math.PI / 2 },
+  { position: [-18.4, 0.23, -13.6], rotationY: -Math.PI / 2 },
+  { position: [-15.2, 0.23, -13.6], rotationY: -Math.PI / 2 },
+]
+
+function ParkingSpace({
+  position,
+  rotationY,
+  accessible = false,
+}: {
+  position: [number, number, number]
+  rotationY: number
+  accessible?: boolean
+}) {
   return (
-    <group position={[18.8, 0.19, -10.5]}>
+    <group position={position} rotation={[0, rotationY, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[7.2, 4.8]} />
-        <meshStandardMaterial color="#6b706d" roughness={0.98} />
+        <planeGeometry args={[2.65, 5.0]} />
+        <meshBasicMaterial color={accessible ? '#255e84' : '#32383b'} toneMapped={false} />
       </mesh>
-      <Tree position={[-2.2, 0, -1]} scale={0.6} />
-      <Tree position={[2.2, 0, 1]} scale={0.62} />
-      <Planter position={[0, 0, 0]} />
+      {[-1.28, 1.28].map((x) => (
+        <mesh key={x} position={[x, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.06, 5.0]} />
+          <meshBasicMaterial color="#e7e2c7" toneMapped={false} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.014, -2.46]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[2.6, 0.06]} />
+        <meshBasicMaterial color="#e7e2c7" toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
+function SupermarketParking() {
+  return (
+    <group>
+      <mesh position={[-21.6, 0.175, -11.9]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[19.5, 8.2]} />
+        <meshStandardMaterial color="#31383b" roughness={0.9} />
+      </mesh>
+
+      {SUPERMARKET_PARKING_SPOTS.map((spot, index) => (
+        <ParkingSpace key={index} {...spot} accessible={index === 0} />
+      ))}
+
+      <mesh position={[-31.4, 0.18, -8.5]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[3.2, 4.0]} />
+        <meshStandardMaterial color="#31383b" roughness={0.9} />
+      </mesh>
+
+      <mesh position={[-31.4, 0.19, -6.6]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[3.2, 1.4]} />
+        <meshStandardMaterial color="#31383b" roughness={0.9} />
+      </mesh>
+
+      {[-29.6, -13.6].map((x) => (
+        <group key={x} position={[x, 0.2, -8.0]}>
+          <mesh position={[0, 0.24, 0]}>
+            <boxGeometry args={[0.55, 0.48, 5.8]} />
+            <meshStandardMaterial color="#334d3c" roughness={1} />
+          </mesh>
+          <Tree position={[0, 0.25, -1.55]} scale={0.48} />
+          <Tree position={[0, 0.25, 1.55]} scale={0.48} />
+        </group>
+      ))}
+
+      <group position={[-21.5, 0.2, -8.35]}>
+        <mesh position={[0, 1.4, 0]}>
+          <boxGeometry args={[5.4, 0.12, 2.0]} />
+          <meshStandardMaterial color="#667379" metalness={0.55} roughness={0.38} />
+        </mesh>
+        {[-2.3, 2.3].map((x) => (
+          <mesh key={x} position={[x, 0.72, 0]}>
+            <cylinderGeometry args={[0.06, 0.07, 1.45, 8]} />
+            <meshStandardMaterial color="#4e5a60" metalness={0.6} />
+          </mesh>
+        ))}
+      </group>
+    </group>
+  )
+}
+
+function RoundaboutDistrict() {
+  const centerX = 21.5
+  const centerZ = -14.5
+  const radius = 5.8
+
+  return (
+    <group>
+      <mesh position={[11.2, 0.055, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[9.4, 6.8]} />
+        <meshStandardMaterial color="#242b2e" roughness={0.88} />
+      </mesh>
+      <mesh position={[centerX, 0.052, -23.5]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[6.8, 9.5]} />
+        <meshStandardMaterial color="#242b2e" roughness={0.88} />
+      </mesh>
+      <mesh position={[30.6, 0.052, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[8.6, 6.8]} />
+        <meshStandardMaterial color="#242b2e" roughness={0.88} />
+      </mesh>
+
+      <mesh position={[centerX, 0.055, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[4.05, radius + 1.8, 48]} />
+        <meshStandardMaterial color="#242b2e" roughness={0.88} />
+      </mesh>
+
+      <mesh position={[centerX, 0.20, centerZ]}>
+        <cylinderGeometry args={[3.8, 3.95, 0.38, 36]} />
+        <meshStandardMaterial color="#2d4935" roughness={1} />
+      </mesh>
+      <mesh position={[centerX, 0.42, centerZ]}>
+        <cylinderGeometry args={[3.15, 3.4, 0.2, 32]} />
+        <meshStandardMaterial color="#355b3f" roughness={1} />
+      </mesh>
+
+      <Tree position={[centerX, 0.42, centerZ]} scale={1.1} />
+      <Tree position={[centerX - 1.8, 0.42, centerZ + 0.8]} scale={0.55} />
+      <Tree position={[centerX + 1.8, 0.42, centerZ - 0.8]} scale={0.55} />
+
+      {Array.from({ length: 16 }).map((_, index) => {
+        const angle = (index / 16) * Math.PI * 2
+        return (
+          <mesh
+            key={index}
+            position={[
+              centerX + Math.cos(angle) * (radius + 0.6),
+              0.09,
+              centerZ + Math.sin(angle) * (radius + 0.6),
+            ]}
+            rotation={[-Math.PI / 2, 0, -angle]}
+          >
+            <planeGeometry args={[1.1, 0.08]} />
+            <meshBasicMaterial color="#eeeeea" toneMapped={false} />
+          </mesh>
+        )
+      })}
+    </group>
+  )
+}
+
+function CommercialStrip() {
+  const shops = [
+    { x: 12.2, label: 'FARMACIA', accent: '#39b66f', facade: '#d8ded7' },
+    { x: 19.0, label: 'CAFE', accent: '#d58a3a', facade: '#d7cec0' },
+    { x: 25.8, label: 'PADARIA', accent: '#e3563e', facade: '#d7c7b5' },
+  ]
+
+  return (
+    <group position={[0, 0, 17.2]}>
+      {shops.map((shop) => {
+        const sign = useSignTexture(shop.label, shop.accent, 512, 150)
+        return (
+          <group key={shop.label} position={[shop.x, 0, 0]}>
+            <mesh position={[0, 1.85, 0]}>
+              <boxGeometry args={[5.8, 3.7, 5.0]} />
+              <meshStandardMaterial color={shop.facade} roughness={0.76} />
+            </mesh>
+            <mesh position={[0, 1.45, -2.53]}>
+              <planeGeometry args={[4.6, 2.2]} />
+              <meshStandardMaterial color="#a9d9e7" emissive="#4b8898" emissiveIntensity={0.35} roughness={0.2} />
+            </mesh>
+            <mesh position={[0, 3.3, -2.58]}>
+              <planeGeometry args={[4.8, 1.25]} />
+              <meshBasicMaterial map={sign ?? undefined} color={sign ? '#ffffff' : shop.accent} toneMapped={false} />
+            </mesh>
+          </group>
+        )
+      })}
+    </group>
+  )
+}
+
+function GasStation() {
+  return (
+    <group position={[33.0, 0.18, 8.8]}>
+      <mesh position={[0, 3.2, 0]}>
+        <boxGeometry args={[10.5, 0.45, 7.0]} />
+        <meshStandardMaterial color="#f3f0dd" roughness={0.55} />
+      </mesh>
+      <mesh position={[0, 3.48, 0]}>
+        <boxGeometry args={[10.8, 0.12, 7.3]} />
+        <meshBasicMaterial color="#e44a3e" toneMapped={false} />
+      </mesh>
+      {[[-4.2, -2.7], [4.2, -2.7], [-4.2, 2.7], [4.2, 2.7]].map(([x, z], index) => (
+        <mesh key={index} position={[x, 1.65, z]}>
+          <cylinderGeometry args={[0.09, 0.11, 3.3, 8]} />
+          <meshStandardMaterial color="#e9ece7" metalness={0.55} roughness={0.35} />
+        </mesh>
+      ))}
+      {[-2.4, 2.4].map((x) => (
+        <group key={x} position={[x, 0.55, 0]}>
+          <mesh>
+            <boxGeometry args={[0.75, 1.1, 0.65]} />
+            <meshStandardMaterial color="#d9dde0" roughness={0.55} />
+          </mesh>
+          <mesh position={[0, 0.15, -0.34]}>
+            <planeGeometry args={[0.45, 0.45]} />
+            <meshBasicMaterial color="#1d6777" toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
     </group>
   )
 }
@@ -411,23 +656,25 @@ function PocketSquare() {
 function CityBlocks({ quality }: { quality: 'medium' | 'high' }) {
   const buildings =
     quality === 'high'
-      ? CITY_BUILDINGS
-      : CITY_BUILDINGS.filter((building) => building.district !== 'outer').slice(0, 12)
+      ? CITY_FRAME_BUILDINGS
+      : CITY_FRAME_BUILDINGS.filter((_, index) => ![6, 7, 8, 9, 10, 11].includes(index))
 
   return (
     <>
-      {/* Quarteirões coerentes: os edifícios agora assentam sobre lotes urbanos definidos. */}
-      <CityBlockPad position={[-19.5, 0, -15.0]} size={[24.2, 15.4]} />
-      <CityBlockPad position={[19.5, 0, -15.0]} size={[24.2, 15.4]} />
-      <CityBlockPad position={[-19.5, 0, 15.0]} size={[24.2, 15.4]} />
-      <CityBlockPad position={[19.5, 0, 15.0]} size={[24.2, 15.4]} />
+      <CityBlockPad position={[-21.5, 0, -15.0]} size={[25.0, 16.0]} tone="#6a7070" />
+      <CityBlockPad position={[21.0, 0, -15.0]} size={[25.0, 16.0]} tone="#666c6c" />
+      <CityBlockPad position={[-21.5, 0, 15.0]} size={[25.0, 16.0]} tone="#626868" />
+      <CityBlockPad position={[21.0, 0, 15.0]} size={[25.0, 16.0]} tone="#656b6b" />
 
-      <ParkingLot />
-      <PocketSquare />
+      <SupermarketBuilding />
+      <SupermarketParking />
+      <RoundaboutDistrict />
+      <CommercialStrip />
+      {quality === 'high' && <GasStation />}
 
       <Suspense fallback={null}>
         {buildings.map((building, index) => (
-          <GlbBuilding key={`${building.district}-${index}`} {...building} />
+          <GlbBuilding key={index} {...building} />
         ))}
       </Suspense>
     </>
