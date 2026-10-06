@@ -11,7 +11,9 @@ import {
   type ParkingSpotDefinition,
 } from './cityLayout'
 
-import { parkingApproachCurve, parkingAlignCurve, parkingExitCurve, roundaboutRoute, type RoundaboutLeg } from './roadGeometry'
+import { parkingApproachCurve, parkingAlignCurve, parkingExitCurve, supermarketPedestrianHeight, roundaboutRoute, type RoundaboutLeg } from './roadGeometry'
+
+import { marketVehicleMustYield, marketPedestrianMustWait } from './parkingTraffic'
 
 type Quality = 'low' | 'medium' | 'high'
 
@@ -26,6 +28,8 @@ export type ParkingCarState =
   | 'leaving-parking'
 
 type OccupancyTable = Map<string, string>
+type Actors = React.MutableRefObject<Map<string, THREE.Group>>
+type MovementOwner = React.MutableRefObject<string | null>
 
 const STATIC_CARS = [
   { spotId: 'A02', variant: 'concept' as VehicleVariant, color: '#d9e1e5' },
@@ -86,6 +90,9 @@ function ParkingCarAgent({
   color,
   delay,
   dwellSeconds,
+  movementOwner,
+  vehicleActors,
+  pedestrianActors,
 }: {
   id: string
   running: boolean
@@ -94,6 +101,9 @@ function ParkingCarAgent({
   color: string
   delay: number
   dwellSeconds: number
+  movementOwner: MovementOwner
+  vehicleActors: Actors
+  pedestrianActors: Actors
 }) {
   const ref = useRef<THREE.Group>(null)
   const state = useRef<ParkingCarState>('driving')
@@ -123,6 +133,7 @@ function ParkingCarAgent({
     if (spot && occupancy.current.get(spot.id) === id) {
       occupancy.current.delete(spot.id)
     }
+    if (movementOwner.current === id) movementOwner.current = null
     state.current = 'driving'
     stateProgress.current = 0
     parkedTimer.current = 0
@@ -134,10 +145,15 @@ function ParkingCarAgent({
     if (ref.current) ref.current.visible = false
   }
 
-  useEffect(() => () => {
-    const spot = spotRef.current
-    if (spot && occupancy.current.get(spot.id) === id) occupancy.current.delete(spot.id)
-  }, [id, occupancy])
+  useEffect(() => {
+    if (ref.current) vehicleActors.current.set(id, ref.current)
+    return () => {
+      const spot = spotRef.current
+      if (spot && occupancy.current.get(spot.id) === id) occupancy.current.delete(spot.id)
+      if (movementOwner.current === id) movementOwner.current = null
+      vehicleActors.current.delete(id)
+    }
+  }, [id, occupancy, movementOwner, vehicleActors])
 
   useFrame((_frame, deltaRaw) => {
     const group = ref.current
@@ -158,12 +174,20 @@ function ParkingCarAgent({
       }
     }
 
+    if (state.current === 'driving' && movementOwner.current && movementOwner.current !== id) {
+      group.visible = false
+      return
+    }
     group.visible = true
     const spot = spotRef.current
     if (!spot) return
 
+    group.userData.parkingMoving = state.current !== 'parked'
+    if (state.current !== 'parked' && state.current !== 'driving' &&
+        marketVehicleMustYield(group.position, pedestrianActors.current.values())) return
     switch (state.current) {
       case 'driving':
+        movementOwner.current = id
         if (approachRef.current) applyCurveTransform(group, approachRef.current, 0)
         state.current = 'entering-parking'
         stateProgress.current = 0
@@ -172,7 +196,7 @@ function ParkingCarAgent({
       case 'entering-parking': {
         const curve = approachRef.current
         if (!curve) return
-        stateProgress.current += delta / 7.5
+        stateProgress.current += delta * 3 / curve.getLength()
         applyCurveTransform(group, curve, stateProgress.current)
         if (stateProgress.current >= 1) {
           state.current = 'searching-space'
@@ -192,7 +216,7 @@ function ParkingCarAgent({
       case 'aligning': {
         const curve = alignRef.current
         if (!curve) return
-        stateProgress.current += delta / 2.3
+        stateProgress.current += delta * 1.25 / curve.getLength()
         applyCurveTransform(group, curve, stateProgress.current)
         if (stateProgress.current >= 0.64) state.current = 'parking'
         break
@@ -201,13 +225,14 @@ function ParkingCarAgent({
       case 'parking': {
         const curve = alignRef.current
         if (!curve) return
-        stateProgress.current += delta / 2.8
+        stateProgress.current += delta * 0.75 / curve.getLength()
         applyCurveTransform(group, curve, stateProgress.current)
         if (stateProgress.current >= 1) {
           group.position.set(spot.position[0], 0.04, spot.position[2])
           group.rotation.y = spot.rotationY
           state.current = 'parked'
           parkedTimer.current = 0
+          if (movementOwner.current === id) movementOwner.current = null
         }
         break
       }
@@ -216,7 +241,8 @@ function ParkingCarAgent({
         parkedTimer.current += delta
         group.position.set(spot.position[0], 0.04, spot.position[2])
         group.rotation.y = spot.rotationY
-        if (parkedTimer.current >= dwellSeconds) {
+        if (parkedTimer.current >= dwellSeconds && (!movementOwner.current || movementOwner.current === id)) {
+          movementOwner.current = id
           state.current = 'leaving-space'
           stateProgress.current = 0
         }
@@ -225,7 +251,7 @@ function ParkingCarAgent({
       case 'leaving-space': {
         const curve = alignRef.current
         if (!curve) return
-        stateProgress.current += delta / 2.6
+        stateProgress.current += delta / curve.getLength()
         applyCurveTransform(group, curve, 1 - stateProgress.current)
         if (stateProgress.current >= 1) {
           state.current = 'leaving-parking'
@@ -237,7 +263,7 @@ function ParkingCarAgent({
       case 'leaving-parking': {
         const curve = exitRef.current
         if (!curve) return
-        stateProgress.current += delta / 8.0
+        stateProgress.current += delta * 3 / curve.getLength()
         applyCurveTransform(group, curve, stateProgress.current)
         if (stateProgress.current >= 1) resetAgent()
         break
@@ -356,23 +382,40 @@ function PedestrianFigure({ shirt }: { shirt: string }) {
 }
 
 function PedestrianAgent({
+  id,
   running,
   points,
   speed,
   offset,
   shirt,
   elevation,
+  market,
+  vehicleActors,
+  pedestrianActors,
 }: {
+  id: string
   running: boolean
   points: Array<[number, number]>
   speed: number
   offset: number
   shirt: string
   elevation: number
+  market: boolean
+  vehicleActors: Actors
+  pedestrianActors: Actors
 }) {
   const ref = useRef<THREE.Group>(null)
   const segment = useRef(0)
   const progress = useRef(offset % 1)
+  const initial = useMemo(() => {
+    const x = THREE.MathUtils.lerp(points[0][0], points[1][0], offset % 1)
+    const z = THREE.MathUtils.lerp(points[0][1], points[1][1], offset % 1)
+    return [x, market ? supermarketPedestrianHeight(z) : elevation, z] as [number, number, number]
+  }, [points, offset, market, elevation])
+  useEffect(() => {
+    if (ref.current) pedestrianActors.current.set(id, ref.current)
+    return () => { pedestrianActors.current.delete(id) }
+  }, [id, pedestrianActors])
 
   useFrame((_state, deltaRaw) => {
     if (!running || !ref.current) return
@@ -383,12 +426,13 @@ function PedestrianAgent({
     const dx = to[0] - from[0]
     const dz = to[1] - from[1]
     const distance = Math.max(0.001, Math.hypot(dx, dz))
+    if (market && marketPedestrianMustWait(ref.current.position, to[1], vehicleActors.current.values())) return
     progress.current += (speed * delta) / distance
     const t = Math.min(progress.current, 1)
 
     ref.current.position.set(
       THREE.MathUtils.lerp(from[0], to[0], t),
-      elevation,
+      market ? supermarketPedestrianHeight(THREE.MathUtils.lerp(from[1], to[1], t)) : elevation,
       THREE.MathUtils.lerp(from[1], to[1], t),
     )
     ref.current.rotation.y = -Math.atan2(dz, dx)
@@ -400,7 +444,7 @@ function PedestrianAgent({
   })
 
   return (
-    <group ref={ref}>
+    <group ref={ref} position={initial}>
       <PedestrianFigure shirt={shirt} />
     </group>
   )
@@ -409,9 +453,13 @@ function PedestrianAgent({
 function PedestrianSystem({
   running,
   quality,
+  vehicleActors,
+  pedestrianActors,
 }: {
   running: boolean
   quality: Exclude<Quality, 'low'>
+  vehicleActors: Actors
+  pedestrianActors: Actors
 }) {
   const loops = PEDESTRIAN_PATHS
   const shirts = ['#346aa3', '#9e4d58', '#d2a43a', '#3d8068', '#725a9a', '#b2673c']
@@ -422,6 +470,10 @@ function PedestrianSystem({
       {Array.from({ length: count }).map((_, index) => (
         <PedestrianAgent
           key={index}
+          id={`pedestrian-${index}`}
+          vehicleActors={vehicleActors}
+          pedestrianActors={pedestrianActors}
+          market={index % loops.length === 0 || index % loops.length === 3}
           running={running}
           points={loops[index % loops.length]}
           elevation={index % loops.length === 2 ? 0.26 : index % loops.length === 1 ? 0.18 : 0.04}
@@ -442,6 +494,9 @@ export function CityLife({
   quality: Quality
 }) {
   const occupancy = useRef<OccupancyTable>(new Map())
+  const movementOwner = useRef<string | null>(null)
+  const vehicleActors = useRef<Map<string, THREE.Group>>(new Map())
+  const pedestrianActors = useRef<Map<string, THREE.Group>>(new Map())
 
   if (!occupancy.current.size) {
     for (const spot of SUPERMARKET_PARKING_SPOTS) {
@@ -458,6 +513,9 @@ export function CityLife({
         id="parking-agent-1"
         running={running}
         occupancy={occupancy}
+        movementOwner={movementOwner}
+        vehicleActors={vehicleActors}
+        pedestrianActors={pedestrianActors}
         variant="concept"
         color="#4f7087"
         delay={1}
@@ -468,6 +526,9 @@ export function CityLife({
           id="parking-agent-2"
           running={running}
           occupancy={occupancy}
+          movementOwner={movementOwner}
+          vehicleActors={vehicleActors}
+          pedestrianActors={pedestrianActors}
           variant="sport"
           color="#8a343c"
           delay={5}
@@ -475,7 +536,7 @@ export function CityLife({
         />
       )}
       <RoundaboutTraffic running={running} quality={quality} />
-      <PedestrianSystem running={running} quality={quality} />
+      <PedestrianSystem running={running} quality={quality} vehicleActors={vehicleActors} pedestrianActors={pedestrianActors} />
     </>
   )
 }
