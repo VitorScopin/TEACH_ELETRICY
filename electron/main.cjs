@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron')
+const { app, BrowserWindow, ipcMain, safeStorage } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const { spawn } = require('node:child_process')
@@ -26,6 +26,107 @@ let activeConfig = null
 
 const SIGNAL_IDS = ['west', 'east', 'north', 'south']
 const LIGHT_KEYS = ['red', 'yellow', 'green']
+
+const PROJECT_FILE_NAME = 'teach-project.json'
+
+function getProjectFilePath() {
+  return path.join(app.getPath('userData'), PROJECT_FILE_NAME)
+}
+
+function serializeProjectSnapshot(snapshot) {
+  const safeSnapshot = {
+    ...snapshot,
+    version: 1,
+    savedAt: new Date().toISOString(),
+    config: snapshot?.config ? { ...snapshot.config, opcPassword: '' } : snapshot?.config,
+  }
+
+  const password = snapshot?.config?.opcPassword
+  if (password && safeStorage.isEncryptionAvailable()) {
+    safeSnapshot.secrets = {
+      ...(safeSnapshot.secrets || {}),
+      opcPassword: safeStorage.encryptString(password).toString('base64'),
+    }
+  }
+
+  return safeSnapshot
+}
+
+function hydrateProjectSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return null
+  const hydrated = { ...snapshot }
+
+  if (snapshot.config) {
+    hydrated.config = { ...snapshot.config, opcPassword: '' }
+
+    const encryptedPassword = snapshot?.secrets?.opcPassword
+    if (encryptedPassword && safeStorage.isEncryptionAvailable()) {
+      try {
+        hydrated.config.opcPassword = safeStorage.decryptString(
+          Buffer.from(encryptedPassword, 'base64'),
+        )
+      } catch {}
+    }
+  }
+
+  delete hydrated.secrets
+  return hydrated
+}
+
+ipcMain.handle('project:load', async () => {
+  try {
+    const filePath = getProjectFilePath()
+    if (!fs.existsSync(filePath)) {
+      return { ok: true, snapshot: null, path: filePath }
+    }
+
+    const raw = await fs.promises.readFile(filePath, 'utf8')
+    const parsed = JSON.parse(raw)
+    return {
+      ok: true,
+      snapshot: hydrateProjectSnapshot(parsed),
+      path: filePath,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+})
+
+ipcMain.handle('project:save', async (_event, snapshot) => {
+  try {
+    const filePath = getProjectFilePath()
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+    const serialized = serializeProjectSnapshot(snapshot)
+    await fs.promises.writeFile(filePath, JSON.stringify(serialized, null, 2), 'utf8')
+
+    return {
+      ok: true,
+      path: filePath,
+      savedAt: serialized.savedAt,
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+})
+
+ipcMain.handle('project:reset', async () => {
+  try {
+    const filePath = getProjectFilePath()
+    await fs.promises.rm(filePath, { force: true })
+    return { ok: true, path: filePath }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+})
 
 function createWindow() {
   const win = new BrowserWindow({
