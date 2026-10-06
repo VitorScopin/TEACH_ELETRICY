@@ -504,7 +504,22 @@ function TrafficCars({
         const front = car.progress + car.length / 2
         if (front > def.stopProgress + 0.01) car.clearedStopLine = true
         const hasEnteredIntersection = car.clearedStopLine || front > -TRAFFIC_WORLD.intersectionHalf
-        const mustStopForSignal = !signal.green && !hasEnteredIntersection
+        const distanceToStopLine = def.stopProgress - front
+        const comfortableStoppingDistance =
+          (car.speed * car.speed) / (2 * 3.8) + 0.9
+
+        // Red and invalid/all-off states always demand a stop. On yellow, use a
+        // dilemma zone: cars that can stop comfortably do so; cars already too
+        // close continue through instead of emergency-braking on the crosswalk.
+        const yellowCanStop =
+          signal.yellow &&
+          !signal.green &&
+          distanceToStopLine > comfortableStoppingDistance
+        const signalDemandsStop =
+          signal.red ||
+          (!signal.green && !signal.yellow) ||
+          yellowCanStop
+        const mustStopForSignal = signalDemandsStop && !hasEnteredIntersection
 
         let targetFront = Number.POSITIVE_INFINITY
 
