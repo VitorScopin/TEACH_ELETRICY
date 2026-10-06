@@ -513,7 +513,9 @@ function TrafficCars({
         }
 
         if (ahead) {
-          const safeGap = Math.max(2.15, car.speed * 0.52)
+          // Maintain a small standstill gap plus a speed-dependent time headway.
+          // This avoids the accordion effect when several cars queue at a red light.
+          const safeGap = 2.35 + Math.min(3.6, car.speed * 0.65)
           const aheadRear = ahead.progress - ahead.length / 2
           targetFront = Math.min(targetFront, aheadRear - safeGap)
         }
@@ -522,10 +524,15 @@ function TrafficCars({
         let targetSpeed = car.desiredSpeed
 
         if (Number.isFinite(targetFront)) {
-          if (distance <= 0.08) {
+          if (distance <= 0.1) {
             targetSpeed = 0
-          } else if (distance < 9) {
-            targetSpeed = Math.min(targetSpeed, Math.max(0, distance * 0.72))
+          } else if (distance < 12) {
+            // Physical stopping-speed profile: begin easing off early instead of
+            // repeatedly snapping between cruise speed and zero.
+            const stoppingSpeed = Math.sqrt(
+              2 * 2.0 * Math.max(0, distance - 0.12),
+            )
+            targetSpeed = Math.min(targetSpeed, stoppingSpeed)
           }
         }
 
