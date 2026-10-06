@@ -195,13 +195,37 @@ for (const reverse of [false, true]) {
     }
   })
 }
-const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep, curvatureSpeedLimit, shouldStopForSignal } = require('../src/components/world/vehicleTraffic.ts')
+const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep, curvatureSpeedLimit, shouldStopForSignal, desiredFollowingGap } = require('../src/components/world/vehicleTraffic.ts')
 const pose = (x, z = 1.75, yaw = 0) => ({ position: [x, 0, z], rotationY: yaw })
-const actor = (p, order) => { const group = new THREE.Group(); group.position.set(...p.position); group.rotation.y = p.rotationY; return { group, length: 4.82, width: 1.9, order } }
+const actor = (p, order, speed = 0) => { const group = new THREE.Group(); group.position.set(...p.position); group.rotation.y = p.rotationY; group.userData.trafficSpeed = speed; return { group, length: 4.82, width: 1.9, order } }
 const registry = { current: new Map([['self', actor(pose(0), 1)], ['leader', actor(pose(8), 2)]]) }
 const future = distance => pose(distance)
 assert(trafficSpeedLimit(registry, 'self', future, 8) < 8, 'following vehicle brakes before leader')
 assert(safeVehicleStep(registry, 'self', 5, future) < 3, 'body guard clamps following travel')
+
+assert(desiredFollowingGap(0) >= 2.3, 'stopped traffic preserves a standstill gap')
+assert(desiredFollowingGap(6) > desiredFollowingGap(2), 'following gap grows with speed')
+
+const pacedFollower = actor(pose(0), 1, 6)
+const pacedLeader = actor(pose(11), 2, 2.5)
+const pacedRegistry = {
+  current: new Map([
+    ['paced-follower', pacedFollower],
+    ['paced-leader', pacedLeader],
+  ]),
+}
+const pacedFuture = distance => pose(distance)
+const pacedLimit = trafficSpeedLimit(pacedRegistry, 'paced-follower', pacedFuture, 7)
+assert(
+  pacedLimit < 4.5,
+  'fast follower matches a slower leader before reaching collision distance',
+)
+
+pacedLeader.group.position.x = 18
+assert(
+  trafficSpeedLimit(pacedRegistry, 'paced-follower', pacedFuture, 7) > pacedLimit,
+  'follower can recover speed when the headway opens',
+)
 assert(boundedTrafficStep(-12, 4.82, 8, 1, -9) < 0.6, 'red light prevents overshooting stop bar')
 assert.equal(boundedTrafficStep(-10, 4.82, 8, 1, -9), 0, 'queue constraint never reverses a car')
 registry.current.set('leader', actor(pose(0, -1.75, Math.PI), 2))
