@@ -80,7 +80,10 @@ function roundaboutState(pose: VehiclePose) {
       radius >= ROUNDABOUT.roadOuterRadius - 0.2 &&
       radius < ROUNDABOUT.roadOuterRadius + 13 &&
       radialDot < -0.18,
-    clearance: Math.max(0, radius - ROUNDABOUT.roadOuterRadius - 1.15),
+    // Keep the vehicle CENTER far enough back that its front bumper does
+    // not protrude into the circulating lane while yielding. 2.85 m covers
+    // half of the largest car plus a small safety margin.
+    clearance: Math.max(0, radius - ROUNDABOUT.roadOuterRadius - 2.85),
   }
 }
 
