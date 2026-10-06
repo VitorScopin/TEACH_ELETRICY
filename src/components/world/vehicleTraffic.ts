@@ -38,6 +38,7 @@ function roundaboutState(pose: VehiclePose) {
 
   return {
     radius,
+    angle: Math.atan2(dz, dx),
     radialDot,
     tangentialDot,
     circulating:
@@ -91,6 +92,13 @@ function junctionYieldSpeed(distance: number) {
   return Math.sqrt(2 * 3.1 * clearance)
 }
 
+function clockwiseAngleGap(from: number, to: number) {
+  let gap = from - to
+  while (gap < 0) gap += Math.PI * 2
+  while (gap >= Math.PI * 2) gap -= Math.PI * 2
+  return gap
+}
+
 export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtDistance: (distance: number) => VehiclePose, desiredSpeed: number) {
   const self = registry.current.get(id)
   if (!self) return desiredSpeed
@@ -120,7 +128,15 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
     // footprints were nearly intersecting, which caused abrupt stops/collisions.
     if (selfRoundabout.approaching) {
       if (otherRoundabout.circulating) {
-        limit = Math.min(limit, roundaboutYieldSpeed(selfRoundabout.clearance))
+        // Yield only when the circulating car is actually approaching THIS
+        // entry. A car that has already passed the entry must not block it
+        // until it completes the entire circle.
+        const arcToEntry =
+          clockwiseAngleGap(otherRoundabout.angle, selfRoundabout.angle) *
+          ROUNDABOUT.laneRadius
+        if (arcToEntry < 13.5) {
+          limit = Math.min(limit, roundaboutYieldSpeed(selfRoundabout.clearance))
+        }
       } else if (
         otherRoundabout.approaching &&
         other.order < self.order &&
@@ -155,10 +171,29 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
       forward > 0 &&
       Math.cos(now.rotationY - pose.rotationY) > 0.35
 
+    const circleGap =
+      selfRoundabout.circulating && otherRoundabout.circulating
+        ? clockwiseAngleGap(selfRoundabout.angle, otherRoundabout.angle) *
+          ROUNDABOUT.laneRadius
+        : Number.POSITIVE_INFINITY
+
+    const circleFollowing =
+      selfRoundabout.circulating &&
+      otherRoundabout.circulating &&
+      circleGap > 0.25 &&
+      circleGap < 14
+
+    const circulatingApproachesThisEntry =
+      selfRoundabout.approaching &&
+      otherRoundabout.circulating &&
+      clockwiseAngleGap(otherRoundabout.angle, selfRoundabout.angle) *
+        ROUNDABOUT.laneRadius <
+        13.5
+
     const yieldToOther =
       following ||
-      (otherRoundabout.circulating && !selfRoundabout.circulating) ||
-      (selfRoundabout.circulating && otherRoundabout.circulating && forward > 0) ||
+      circulatingApproachesThisEntry ||
+      circleFollowing ||
       (
         !selfRoundabout.circulating &&
         !otherRoundabout.circulating &&
