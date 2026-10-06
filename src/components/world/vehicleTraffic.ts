@@ -1,4 +1,5 @@
 import type { MutableRefObject } from 'react'
+import * as THREE from 'three'
 import type { Group } from 'three'
 import { ROUNDABOUT } from './cityLayout'
 
@@ -99,13 +100,47 @@ function clockwiseAngleGap(from: number, to: number) {
   return gap
 }
 
+function normalizeAngle(angle: number) {
+  let value = angle
+  while (value > Math.PI) value -= Math.PI * 2
+  while (value < -Math.PI) value += Math.PI * 2
+  return value
+}
+
+/**
+ * Reduce cruise speed before tighter bends. This is intentionally based on
+ * the vehicle's own future poses, so every route (boulevard, roundabout,
+ * parking and local streets) gets the same behaviour without hardcoded zones.
+ */
+export function curvatureSpeedLimit(
+  poseAtDistance: (distance: number) => VehiclePose,
+  desiredSpeed: number,
+) {
+  const now = poseAtDistance(0)
+  const near = poseAtDistance(4)
+  const far = poseAtDistance(8)
+
+  const nearTurn = Math.abs(normalizeAngle(near.rotationY - now.rotationY))
+  const farTurn = Math.abs(normalizeAngle(far.rotationY - near.rotationY))
+  const turn = Math.max(nearTurn, farTurn)
+
+  if (turn < 0.08) return desiredSpeed
+
+  const curveCap = THREE.MathUtils.clamp(
+    6.2 - turn * 5.0,
+    2.6,
+    desiredSpeed,
+  )
+  return Math.min(desiredSpeed, curveCap)
+}
+
 export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtDistance: (distance: number) => VehiclePose, desiredSpeed: number) {
   const self = registry.current.get(id)
   if (!self) return desiredSpeed
 
   const now = poseAtDistance(0)
   const selfRoundabout = roundaboutState(now)
-  let limit = desiredSpeed
+  let limit = curvatureSpeedLimit(poseAtDistance, desiredSpeed)
 
   for (const [otherId, other] of registry.current) {
     if (otherId === id || !actorActive(other)) continue
