@@ -36,6 +36,14 @@ import type { IntersectionTrafficState, PlcConfig, SignalId, TrafficState } from
 type Mode = 'simulation' | 'plc'
 type TrafficKey = 'red' | 'yellow' | 'green'
 type GraphicsQuality = 'low' | 'medium' | 'high'
+type WorldEnvironment = {
+  hour: number
+  autoTime: boolean
+  timeSpeed: number
+  rain: number
+  wind: number
+  windDirection: number
+}
 type HubPanel = 'connections' | 'settings' | null
 type OpcTagTestState = {
   loading: boolean
@@ -153,6 +161,14 @@ function App() {
   const [running, setRunning] = useState(true)
   const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>('medium')
   const [targetFps, setTargetFps] = useState(30)
+  const [environment, setEnvironment] = useState<WorldEnvironment>({
+    hour: 14,
+    autoTime: false,
+    timeSpeed: 60,
+    rain: 0,
+    wind: 0.15,
+    windDirection: 35,
+  })
   const [connected, setConnected] = useState(false)
   const [windowMaximized, setWindowMaximized] = useState(false)
   const [config, setConfig] = useState<PlcConfig>(defaultConfig)
@@ -177,6 +193,17 @@ function App() {
   useEffect(() => {
     signalsRef.current = signals
   }, [signals])
+
+  useEffect(() => {
+    if (!environment.autoTime) return
+    const timer = window.setInterval(() => {
+      setEnvironment((current) => ({
+        ...current,
+        hour: (current.hour + current.timeSpeed / 3600) % 24,
+      }))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [environment.autoTime, environment.timeSpeed])
 
   useEffect(() => {
     if (mode !== 'simulation' || !running) return
@@ -509,7 +536,13 @@ function App() {
       </aside>
 
       <main className="immersive-stage">
-        <TrafficSimulation3D signals={signals} running={running} quality={graphicsQuality} targetFps={targetFps} />
+        <TrafficSimulation3D
+          signals={signals}
+          running={running}
+          quality={graphicsQuality}
+          targetFps={targetFps}
+          environment={environment}
+        />
 
         <div className="immersive-topbar">
           <div className="immersive-title">
@@ -527,6 +560,10 @@ function App() {
             <div>
               <span>Estado</span>
               <strong><i className={`state-led ${activeLight}`} />{stateLabel[activeLight]}</strong>
+            </div>
+            <div>
+              <span>Ambiente</span>
+              <strong>{String(Math.floor(environment.hour)).padStart(2, '0')}:{String(Math.floor((environment.hour % 1) * 60)).padStart(2, '0')} • {environment.rain > .65 ? 'CHUVA FORTE' : environment.rain > .15 ? 'CHUVA' : 'SECO'}</strong>
             </div>
             <button
               className="immersive-pause"
@@ -986,6 +1023,89 @@ function App() {
 
                       <small>
                         FPS maior deixa os carros mais fluidos, mas aumenta CPU/GPU. Para testar PLC, 30–45 FPS costuma ser o melhor equilíbrio.
+                      </small>
+                    </div>
+
+                    <div className="environment-settings-card">
+                      <div className="environment-settings-head">
+                        <div>
+                          <span>AMBIENTE DO MUNDO</span>
+                          <strong>Tempo, clima e vento</strong>
+                        </div>
+                        <b>{String(Math.floor(environment.hour)).padStart(2, '0')}:{String(Math.floor((environment.hour % 1) * 60)).padStart(2, '0')}</b>
+                      </div>
+
+                      <label>
+                        Hora do mundo
+                        <input
+                          type="range"
+                          min="0"
+                          max="23.75"
+                          step="0.25"
+                          value={environment.hour}
+                          disabled={environment.autoTime}
+                          onChange={(e)=>setEnvironment({...environment,hour:Number(e.target.value)})}
+                        />
+                        <small>{environment.hour >= 6 && environment.hour < 18 ? 'Dia' : environment.hour >= 18 && environment.hour < 20 ? 'Entardecer' : environment.hour >= 5 && environment.hour < 6 ? 'Amanhecer' : 'Noite'}</small>
+                      </label>
+
+                      <div className="environment-toggle-row">
+                        <button
+                          className={environment.autoTime ? 'active' : ''}
+                          onClick={()=>setEnvironment({...environment,autoTime:!environment.autoTime})}
+                        >
+                          {environment.autoTime ? 'Ciclo automático ON' : 'Ciclo automático OFF'}
+                        </button>
+                        <select
+                          value={environment.timeSpeed}
+                          disabled={!environment.autoTime}
+                          onChange={(e)=>setEnvironment({...environment,timeSpeed:Number(e.target.value)})}
+                        >
+                          <option value={15}>15×</option>
+                          <option value={60}>60×</option>
+                          <option value={300}>300×</option>
+                          <option value={900}>900×</option>
+                        </select>
+                      </div>
+
+                      <label>
+                        Chuva <b>{Math.round(environment.rain * 100)}%</b>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={environment.rain}
+                          onChange={(e)=>setEnvironment({...environment,rain:Number(e.target.value)})}
+                        />
+                      </label>
+
+                      <label>
+                        Vento <b>{Math.round(environment.wind * 100)}%</b>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.05"
+                          value={environment.wind}
+                          onChange={(e)=>setEnvironment({...environment,wind:Number(e.target.value)})}
+                        />
+                      </label>
+
+                      <label>
+                        Direção do vento <b>{Math.round(environment.windDirection)}°</b>
+                        <input
+                          type="range"
+                          min="0"
+                          max="359"
+                          step="1"
+                          value={environment.windDirection}
+                          onChange={(e)=>setEnvironment({...environment,windDirection:Number(e.target.value)})}
+                        />
+                      </label>
+
+                      <small>
+                        Cada controle é independente: hora, chuva e vento podem ser combinados livremente sem alterar a lógica do PLC.
                       </small>
                     </div>
 
