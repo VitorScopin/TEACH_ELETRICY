@@ -310,41 +310,127 @@ function GlbBuilding({
   )
 }
 
-const CITY_BUILDINGS: Array<{
+type CityBuilding = {
   variant: BuildingVariant
   position: [number, number, number]
   rotationY?: number
   scale?: number
-}> = [
-  { variant: 'large', position: [-31, 0.18, -25], rotationY: 0.12, scale: 1.0 },
-  { variant: 'medium', position: [-20, 0.18, -27], rotationY: -0.18, scale: 0.92 },
-  { variant: 'small', position: [-10, 0.18, -26], rotationY: 0.08, scale: 0.95 },
-  { variant: 'medium', position: [11, 0.18, -27], rotationY: -0.08, scale: 0.95 },
-  { variant: 'large', position: [23, 0.18, -26], rotationY: 0.14, scale: 1.02 },
-  { variant: 'small', position: [34, 0.18, -24], rotationY: -0.16, scale: 0.92 },
+  district: 'nw' | 'ne' | 'sw' | 'se' | 'outer'
+}
 
-  { variant: 'medium', position: [-34, 0.18, 25], rotationY: Math.PI + 0.08, scale: 0.96 },
-  { variant: 'large', position: [-22, 0.18, 27], rotationY: Math.PI - 0.1, scale: 1.04 },
-  { variant: 'small', position: [-10, 0.18, 26], rotationY: Math.PI + 0.14, scale: 0.92 },
-  { variant: 'small', position: [10, 0.18, 26], rotationY: Math.PI - 0.12, scale: 0.96 },
-  { variant: 'medium', position: [21, 0.18, 27], rotationY: Math.PI + 0.08, scale: 0.98 },
-  { variant: 'large', position: [34, 0.18, 25], rotationY: Math.PI - 0.12, scale: 1.0 },
+const CITY_BUILDINGS: CityBuilding[] = [
+  // NOROESTE — frente urbana contínua voltada para a avenida
+  { district: 'nw', variant: 'large',  position: [-26.0, 0.18, -17.0], rotationY: 0, scale: 0.90 },
+  { district: 'nw', variant: 'medium', position: [-17.2, 0.18, -16.8], rotationY: 0, scale: 0.82 },
+  { district: 'nw', variant: 'small',  position: [-10.3, 0.18, -16.5], rotationY: 0, scale: 0.82 },
+  { district: 'nw', variant: 'medium', position: [-25.0, 0.18, -10.5], rotationY: Math.PI / 2, scale: 0.76 },
 
-  { variant: 'small', position: [-43, 0.18, -11], rotationY: Math.PI / 2, scale: 0.9 },
-  { variant: 'medium', position: [-44, 0.18, 5], rotationY: Math.PI / 2 + 0.1, scale: 0.96 },
-  { variant: 'small', position: [43, 0.18, -9], rotationY: -Math.PI / 2, scale: 0.94 },
-  { variant: 'medium', position: [44, 0.18, 8], rotationY: -Math.PI / 2 - 0.1, scale: 0.96 },
+  // NORDESTE — área mais vertical/densa, como centro comercial
+  { district: 'ne', variant: 'small',  position: [10.4, 0.18, -16.4], rotationY: 0, scale: 0.84 },
+  { district: 'ne', variant: 'large',  position: [19.0, 0.18, -17.2], rotationY: 0, scale: 0.92 },
+  { district: 'ne', variant: 'medium', position: [27.4, 0.18, -16.7], rotationY: 0, scale: 0.80 },
+  { district: 'ne', variant: 'medium', position: [26.0, 0.18, -10.3], rotationY: -Math.PI / 2, scale: 0.74 },
+
+  // SUDOESTE — quarteirão mais aberto, com espaço para praça/estacionamento
+  { district: 'sw', variant: 'medium', position: [-26.0, 0.18, 16.8], rotationY: Math.PI, scale: 0.82 },
+  { district: 'sw', variant: 'small',  position: [-17.4, 0.18, 16.4], rotationY: Math.PI, scale: 0.82 },
+  { district: 'sw', variant: 'medium', position: [-10.4, 0.18, 16.7], rotationY: Math.PI, scale: 0.74 },
+
+  // SUDESTE — uso misto, com edifícios maiores nas esquinas
+  { district: 'se', variant: 'large',  position: [10.8, 0.18, 16.9], rotationY: Math.PI, scale: 0.88 },
+  { district: 'se', variant: 'medium', position: [20.0, 0.18, 16.6], rotationY: Math.PI, scale: 0.80 },
+  { district: 'se', variant: 'small',  position: [27.2, 0.18, 16.5], rotationY: Math.PI, scale: 0.82 },
+  { district: 'se', variant: 'medium', position: [26.0, 0.18, 10.4], rotationY: -Math.PI / 2, scale: 0.72 },
+
+  // SEGUNDA LINHA URBANA — só em qualidade alta, preenchendo o horizonte sem poluir o cruzamento
+  { district: 'outer', variant: 'medium', position: [-27.0, 0.18, -29.5], rotationY: Math.PI, scale: 0.88 },
+  { district: 'outer', variant: 'large',  position: [-16.0, 0.18, -29.8], rotationY: Math.PI, scale: 0.90 },
+  { district: 'outer', variant: 'small',  position: [15.5, 0.18, -29.2], rotationY: Math.PI, scale: 0.90 },
+  { district: 'outer', variant: 'medium', position: [26.5, 0.18, -29.5], rotationY: Math.PI, scale: 0.88 },
+  { district: 'outer', variant: 'small',  position: [-27.0, 0.18, 29.0], rotationY: 0, scale: 0.88 },
+  { district: 'outer', variant: 'medium', position: [-16.2, 0.18, 29.5], rotationY: 0, scale: 0.86 },
+  { district: 'outer', variant: 'large',  position: [16.5, 0.18, 29.6], rotationY: 0, scale: 0.90 },
+  { district: 'outer', variant: 'medium', position: [27.0, 0.18, 29.2], rotationY: 0, scale: 0.86 },
 ]
 
+function CityBlockPad({
+  position,
+  size,
+  tone = '#596064',
+}: {
+  position: [number, number, number]
+  size: [number, number]
+  tone?: string
+}) {
+  return (
+    <group position={position}>
+      <mesh position={[0, 0.08, 0]}>
+        <boxGeometry args={[size[0], 0.16, size[1]]} />
+        <meshStandardMaterial color={tone} roughness={0.96} />
+      </mesh>
+      <mesh position={[0, 0.165, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[size[0] - 0.5, size[1] - 0.5]} />
+        <meshBasicMaterial color="#656b6d" transparent opacity={0.22} />
+      </mesh>
+    </group>
+  )
+}
+
+function ParkingLot() {
+  const lines = [-3.6, -1.8, 0, 1.8, 3.6]
+  return (
+    <group position={[-19.5, 0.19, 10.6]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[11, 5.2]} />
+        <meshStandardMaterial color="#343a3d" roughness={0.92} />
+      </mesh>
+      {lines.map((x) => (
+        <mesh key={x} position={[x, 0.018, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.055, 4.2]} />
+          <meshBasicMaterial color="#d6d2b9" transparent opacity={0.72} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function PocketSquare() {
+  return (
+    <group position={[18.8, 0.19, -10.5]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[7.2, 4.8]} />
+        <meshStandardMaterial color="#6b706d" roughness={0.98} />
+      </mesh>
+      <Tree position={[-2.2, 0, -1]} scale={0.6} />
+      <Tree position={[2.2, 0, 1]} scale={0.62} />
+      <Planter position={[0, 0, 0]} />
+    </group>
+  )
+}
+
 function CityBlocks({ quality }: { quality: 'medium' | 'high' }) {
-  const buildings = quality === 'high' ? CITY_BUILDINGS : CITY_BUILDINGS.slice(0, 8)
+  const buildings =
+    quality === 'high'
+      ? CITY_BUILDINGS
+      : CITY_BUILDINGS.filter((building) => building.district !== 'outer').slice(0, 12)
 
   return (
-    <Suspense fallback={null}>
-      {buildings.map((building, index) => (
-        <GlbBuilding key={index} {...building} />
-      ))}
-    </Suspense>
+    <>
+      {/* Quarteirões coerentes: os edifícios agora assentam sobre lotes urbanos definidos. */}
+      <CityBlockPad position={[-19.5, 0, -15.0]} size={[24.2, 15.4]} />
+      <CityBlockPad position={[19.5, 0, -15.0]} size={[24.2, 15.4]} />
+      <CityBlockPad position={[-19.5, 0, 15.0]} size={[24.2, 15.4]} />
+      <CityBlockPad position={[19.5, 0, 15.0]} size={[24.2, 15.4]} />
+
+      <ParkingLot />
+      <PocketSquare />
+
+      <Suspense fallback={null}>
+        {buildings.map((building, index) => (
+          <GlbBuilding key={`${building.district}-${index}`} {...building} />
+        ))}
+      </Suspense>
+    </>
   )
 }
 
@@ -640,18 +726,18 @@ function RoadScene({
     <>
       {/* World base */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.07, 0]}>
-        <planeGeometry args={[110, 86]} />
+        <planeGeometry args={[94, 72]} />
         <meshStandardMaterial color="#10191e" roughness={0.99} />
       </mesh>
 
       {/* Secondary city streets make the district feel larger without affecting PLC traffic logic */}
-      {[-34, 34].map((z) => (
+      {[-27, 27].map((z) => (
         <mesh key={`outer-road-z-${z}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.015, z]}>
           <planeGeometry args={[110, 7.5]} />
           <meshStandardMaterial color="#1d2428" roughness={0.92} />
         </mesh>
       ))}
-      {[-49, 49].map((x) => (
+      {[-39, 39].map((x) => (
         <mesh key={`outer-road-x-${x}`} rotation={[-Math.PI / 2, 0, 0]} position={[x, -0.012, 0]}>
           <planeGeometry args={[7.5, 86]} />
           <meshStandardMaterial color="#1d2428" roughness={0.92} />
