@@ -1389,6 +1389,337 @@ function TrafficCars({
   )
 }
 
+type RoutePoint = {
+  x: number
+  z: number
+  wait?: number
+}
+
+function StaticParkedCars({ quality }: { quality: 'medium' | 'high' }) {
+  const cars = [
+    { spot: 1, variant: 'concept' as VehicleVariant, color: '#d9e1e5' },
+    { spot: 3, variant: 'lc80' as VehicleVariant, color: '#6d7f89' },
+    { spot: 5, variant: 'sport' as VehicleVariant, color: '#8b2f3c' },
+    { spot: 8, variant: 'ferrari' as VehicleVariant, color: '#203f68' },
+    { spot: 9, variant: 'concept' as VehicleVariant, color: '#d9d1c6' },
+  ]
+  const visible = quality === 'high' ? cars : cars.slice(0, 3)
+
+  return (
+    <>
+      {visible.map((car, index) => {
+        const spot = SUPERMARKET_PARKING_SPOTS[car.spot]
+        return (
+          <group
+            key={index}
+            position={spot.position}
+            rotation={[0, spot.rotationY, 0]}
+            scale={0.93}
+          >
+            <Suspense fallback={null}>
+              <RealisticCarModel variant={car.variant} color={car.color} />
+            </Suspense>
+          </group>
+        )
+      })}
+    </>
+  )
+}
+
+function ParkingCarAgent({
+  running,
+  variant,
+  color,
+  delay = 0,
+  targetSpot = 2,
+}: {
+  running: boolean
+  variant: VehicleVariant
+  color: string
+  delay?: number
+  targetSpot?: number
+}) {
+  const ref = useRef<THREE.Group>(null)
+  const segment = useRef(0)
+  const progress = useRef(0)
+  const waiting = useRef(0)
+  const elapsed = useRef(0)
+  const spot = SUPERMARKET_PARKING_SPOTS[targetSpot]
+
+  const route = useMemo<RoutePoint[]>(() => {
+    const sx = spot.position[0]
+    const sz = spot.position[2]
+    const approachZ = sz > -12 ? -8.2 : -15.0
+
+    return [
+      { x: -37, z: -1.75 },
+      { x: -30.5, z: -1.75 },
+      { x: -30.5, z: -7.2 },
+      { x: -30.5, z: approachZ },
+      { x: sx - 2.4, z: approachZ },
+      { x: sx - 2.4, z: sz },
+      { x: sx, z: sz, wait: 7 },
+      { x: sx - 2.4, z: sz },
+      { x: sx - 2.4, z: -8.2 },
+      { x: -30.5, z: -8.2 },
+      { x: -30.5, z: 1.75 },
+      { x: 37, z: 1.75 },
+    ]
+  }, [spot.position])
+
+  useFrame((_state, deltaRaw) => {
+    if (!running || !ref.current) return
+    const delta = Math.min(deltaRaw, 0.05)
+    elapsed.current += delta
+
+    if (elapsed.current < delay) {
+      ref.current.visible = false
+      return
+    }
+    ref.current.visible = true
+
+    if (waiting.current > 0) {
+      waiting.current = Math.max(0, waiting.current - delta)
+      return
+    }
+
+    const from = route[segment.current]
+    const nextIndex = (segment.current + 1) % route.length
+    const to = route[nextIndex]
+    const dx = to.x - from.x
+    const dz = to.z - from.z
+    const distance = Math.max(0.001, Math.hypot(dx, dz))
+    const speed = 3.4
+    progress.current += (speed * delta) / distance
+
+    const t = Math.min(progress.current, 1)
+    ref.current.position.set(
+      THREE.MathUtils.lerp(from.x, to.x, t),
+      0.24,
+      THREE.MathUtils.lerp(from.z, to.z, t),
+    )
+    ref.current.rotation.y = -Math.atan2(dz, dx)
+
+    if (progress.current >= 1) {
+      segment.current = nextIndex
+      progress.current = 0
+      waiting.current = route[nextIndex].wait ?? 0
+
+      if (segment.current === route.length - 1) {
+        segment.current = 0
+        elapsed.current = 0
+      }
+    }
+  })
+
+  return (
+    <group ref={ref} visible={false}>
+      <Suspense fallback={null}>
+        <RealisticCarModel variant={variant} color={color} />
+      </Suspense>
+    </group>
+  )
+}
+
+function RoundaboutTraffic({
+  running,
+  quality,
+}: {
+  running: boolean
+  quality: 'medium' | 'high'
+}) {
+  const configs = quality === 'high'
+    ? [
+        { phase: 0.2, variant: 'concept' as VehicleVariant, color: '#f0f2f3' },
+        { phase: 2.35, variant: 'sport' as VehicleVariant, color: '#2f5f9a' },
+        { phase: 4.6, variant: 'lc80' as VehicleVariant, color: '#8b2f3c' },
+      ]
+    : [
+        { phase: 0.7, variant: 'concept' as VehicleVariant, color: '#f0f2f3' },
+        { phase: 3.8, variant: 'sport' as VehicleVariant, color: '#2f5f9a' },
+      ]
+
+  return (
+    <>
+      {configs.map((config, index) => (
+        <RoundaboutCar key={index} running={running} {...config} />
+      ))}
+    </>
+  )
+}
+
+function RoundaboutCar({
+  running,
+  phase,
+  variant,
+  color,
+}: {
+  running: boolean
+  phase: number
+  variant: VehicleVariant
+  color: string
+}) {
+  const ref = useRef<THREE.Group>(null)
+  const angle = useRef(phase)
+
+  useFrame((_state, deltaRaw) => {
+    if (!running || !ref.current) return
+    const delta = Math.min(deltaRaw, 0.05)
+    angle.current += delta * 0.33
+    const radius = 6.15
+    const x = 21.5 + Math.cos(angle.current) * radius
+    const z = -14.5 + Math.sin(angle.current) * radius
+
+    ref.current.position.set(x, 0.23, z)
+    ref.current.rotation.y = angle.current - Math.PI / 2
+  })
+
+  return (
+    <group ref={ref}>
+      <Suspense fallback={null}>
+        <RealisticCarModel variant={variant} color={color} />
+      </Suspense>
+    </group>
+  )
+}
+
+function PedestrianFigure({ shirt }: { shirt: string }) {
+  return (
+    <group>
+      <mesh position={[0, 0.86, 0]}>
+        <capsuleGeometry args={[0.16, 0.6, 4, 6]} />
+        <meshStandardMaterial color={shirt} roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 1.43, 0]}>
+        <sphereGeometry args={[0.18, 8, 6]} />
+        <meshStandardMaterial color="#d2a57f" roughness={0.95} />
+      </mesh>
+      <mesh position={[-0.1, 0.32, 0]}>
+        <capsuleGeometry args={[0.07, 0.42, 3, 5]} />
+        <meshStandardMaterial color="#252d35" roughness={0.95} />
+      </mesh>
+      <mesh position={[0.1, 0.32, 0]}>
+        <capsuleGeometry args={[0.07, 0.42, 3, 5]} />
+        <meshStandardMaterial color="#252d35" roughness={0.95} />
+      </mesh>
+    </group>
+  )
+}
+
+function PedestrianAgent({
+  running,
+  points,
+  speed,
+  offset,
+  shirt,
+}: {
+  running: boolean
+  points: Array<[number, number]>
+  speed: number
+  offset: number
+  shirt: string
+}) {
+  const ref = useRef<THREE.Group>(null)
+  const segment = useRef(0)
+  const progress = useRef(offset % 1)
+
+  useFrame((_state, deltaRaw) => {
+    if (!running || !ref.current) return
+    const delta = Math.min(deltaRaw, 0.05)
+    const from = points[segment.current]
+    const nextIndex = (segment.current + 1) % points.length
+    const to = points[nextIndex]
+    const dx = to[0] - from[0]
+    const dz = to[1] - from[1]
+    const distance = Math.max(0.001, Math.hypot(dx, dz))
+    progress.current += (speed * delta) / distance
+    const t = Math.min(progress.current, 1)
+
+    ref.current.position.set(
+      THREE.MathUtils.lerp(from[0], to[0], t),
+      0.22,
+      THREE.MathUtils.lerp(from[1], to[1], t),
+    )
+    ref.current.rotation.y = -Math.atan2(dz, dx)
+
+    if (progress.current >= 1) {
+      segment.current = nextIndex
+      progress.current = 0
+    }
+  })
+
+  return (
+    <group ref={ref}>
+      <PedestrianFigure shirt={shirt} />
+    </group>
+  )
+}
+
+function PedestrianSystem({
+  running,
+  quality,
+}: {
+  running: boolean
+  quality: 'medium' | 'high'
+}) {
+  const loops: Array<Array<[number, number]>> = [
+    [[-30, -7.7], [-13, -7.7], [-13, -21.0], [-30, -21.0]],
+    [[9, 8.0], [31, 8.0], [31, 21.0], [9, 21.0]],
+    [[8.5, -7.8], [31, -7.8], [31, -22.0], [8.5, -22.0]],
+  ]
+  const shirts = ['#346aa3', '#9e4d58', '#d2a43a', '#3d8068', '#725a9a', '#b2673c']
+  const count = quality === 'high' ? 12 : 6
+
+  return (
+    <>
+      {Array.from({ length: count }).map((_, index) => (
+        <PedestrianAgent
+          key={index}
+          running={running}
+          points={loops[index % loops.length]}
+          speed={0.72 + (index % 4) * 0.08}
+          offset={(index * 0.23) % 1}
+          shirt={shirts[index % shirts.length]}
+        />
+      ))}
+    </>
+  )
+}
+
+function CityLife({
+  running,
+  quality,
+}: {
+  running: boolean
+  quality: 'low' | 'medium' | 'high'
+}) {
+  if (quality === 'low') return null
+
+  return (
+    <>
+      <StaticParkedCars quality={quality} />
+      <ParkingCarAgent
+        running={running}
+        variant="concept"
+        color="#4f7087"
+        targetSpot={2}
+        delay={1}
+      />
+      {quality === 'high' && (
+        <ParkingCarAgent
+          running={running}
+          variant="sport"
+          color="#8a343c"
+          targetSpot={6}
+          delay={8}
+        />
+      )}
+      <RoundaboutTraffic running={running} quality={quality} />
+      <PedestrianSystem running={running} quality={quality} />
+    </>
+  )
+}
+
 function environmentPalette(hour: number, rain: number) {
   const normalized = ((hour % 24) + 24) % 24
   const daylight = THREE.MathUtils.clamp(
@@ -1670,6 +2001,7 @@ function Scene({
       <TrafficLight3D traffic={signals.north} position={northSignal} rotationY={Math.PI} />
 
       <TrafficCars signals={signals} running={running} maxCarsPerFlow={quality === 'low' ? 1 : quality === 'medium' ? 2 : 3} />
+      <CityLife running={running} quality={quality} />
 
       <OrbitControls
         makeDefault
