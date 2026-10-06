@@ -228,6 +228,96 @@ assert(
   ) < 4,
   'supermarket access yields to main avenue',
 )
+
+// Focused roundabout intelligence: entering traffic sees the circulating lane
+// before body overlap occurs.
+const westApproach = actor(
+  pose(ROUNDABOUT.center[0] - 11, ROUNDABOUT.center[1], 0),
+  20,
+  4,
+  0,
+)
+const circleAngle = Math.PI + 0.48
+const circlePoint = pose(
+  ROUNDABOUT.center[0] + Math.cos(circleAngle) * ROUNDABOUT.laneRadius,
+  ROUNDABOUT.center[1] + Math.sin(circleAngle) * ROUNDABOUT.laneRadius,
+  Math.PI / 2 - circleAngle,
+)
+const circleCar = actor(circlePoint, 10, 4, 1)
+const roundaboutRegistry = {
+  current: new Map([
+    ['entry-west', westApproach],
+    ['circle-car', circleCar],
+  ]),
+}
+assert(
+  trafficSpeedLimit(
+    roundaboutRegistry,
+    'entry-west',
+    distance => pose(
+      ROUNDABOUT.center[0] - 11 + distance,
+      ROUNDABOUT.center[1],
+      0,
+    ),
+    5,
+  ) < 5,
+  'approaching vehicle yields before entering an occupied roundabout',
+)
+
+// Two simultaneous approaches must not both choose to enter.
+const northApproach = actor(
+  pose(ROUNDABOUT.center[0], ROUNDABOUT.center[1] - 11, -Math.PI / 2),
+  30,
+  4,
+  1,
+)
+const simultaneousRegistry = {
+  current: new Map([
+    ['entry-west', westApproach],
+    ['entry-north', northApproach],
+  ]),
+}
+assert(
+  trafficSpeedLimit(
+    simultaneousRegistry,
+    'entry-north',
+    distance => pose(
+      ROUNDABOUT.center[0],
+      ROUNDABOUT.center[1] - 11 + distance,
+      -Math.PI / 2,
+    ),
+    5,
+  ) < 5,
+  'deterministic entry order prevents simultaneous roundabout merge',
+)
+
+// Once an entry has crossed the give-way line it must be allowed to finish
+// merging instead of stopping in the circular lane.
+const committedWest = actor(
+  pose(ROUNDABOUT.center[0] - 8.4, ROUNDABOUT.center[1], 0),
+  40,
+  3,
+  1,
+)
+const committedRegistry = {
+  current: new Map([
+    ['committed-west', committedWest],
+    ['waiting-north', northApproach],
+  ]),
+}
+assert(
+  trafficSpeedLimit(
+    committedRegistry,
+    'committed-west',
+    distance => pose(
+      ROUNDABOUT.center[0] - 8.4 + distance,
+      ROUNDABOUT.center[1],
+      0,
+    ),
+    3,
+  ) > 0,
+  'vehicle already across give-way line continues its merge',
+)
 const { URBAN_LOTS } = require('../src/components/world/urbanLayout.ts')
 assert(URBAN_LOTS.length >= 12, 'city has populated residential blocks')
 for (const lot of URBAN_LOTS) {
