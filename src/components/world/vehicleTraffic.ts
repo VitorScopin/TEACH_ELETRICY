@@ -66,6 +66,14 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
   const selfRoundabout = roundaboutState(now)
   let limit = desiredSpeed
 
+  // Urban speed profile: approach calmly and circulate at a stable speed.
+  if (selfRoundabout.circulating) {
+    limit = Math.min(limit, 3.8)
+  } else if (selfRoundabout.approaching) {
+    const approachCap = 2.6 + Math.min(1.8, selfRoundabout.clearance * 0.22)
+    limit = Math.min(limit, approachCap)
+  }
+
   for (const [otherId, other] of registry.current) {
     if (otherId === id || !actorActive(other)) continue
 
