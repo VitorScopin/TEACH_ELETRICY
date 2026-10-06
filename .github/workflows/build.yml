@@ -23,3 +23,11 @@ jobs:
 
       - name: TypeScript + Vite build
         run: npm run build
+
+      - name: City geometry and vehicle clearances
+        run: node scripts/check-city.cjs
+
+      - name: Electron entry point syntax
+        run: |
+          node --check electron/main.cjs
+          node --check electron/preload.cjs
