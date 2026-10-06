@@ -2324,3 +2324,40 @@ main {
 .environment-toggle-row select:disabled {
   opacity:.45;
 }
+
+
+/* --- Persistent local project --- */
+.project-persistence-card {
+  min-height:54px;
+  padding:10px 11px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  border:1px solid rgba(52,220,177,.22);
+  border-radius:9px;
+  background:linear-gradient(145deg,rgba(9,54,48,.46),rgba(5,27,31,.72));
+}
+.project-persistence-card span {
+  display:block;
+  color:#48e0bc;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.11em;
+}
+.project-persistence-card strong {
+  display:block;
+  margin-top:3px;
+  color:#d8f4ec;
+  font-size:9px;
+}
+.project-persistence-card b {
+  flex:0 0 auto;
+  padding:5px 7px;
+  border:1px solid rgba(63,226,185,.24);
+  border-radius:6px;
+  background:rgba(20,108,88,.18);
+  color:#70efc8;
+  font-size:6.5px;
+  letter-spacing:.08em;
+}
