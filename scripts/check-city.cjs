@@ -195,7 +195,7 @@ for (const reverse of [false, true]) {
     }
   })
 }
-const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep } = require('../src/components/world/vehicleTraffic.ts')
+const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep, curvatureSpeedLimit, shouldStopForSignal } = require('../src/components/world/vehicleTraffic.ts')
 const pose = (x, z = 1.75, yaw = 0) => ({ position: [x, 0, z], rotationY: yaw })
 const actor = (p, order) => { const group = new THREE.Group(); group.position.set(...p.position); group.rotation.y = p.rotationY; return { group, length: 4.82, width: 1.9, order } }
 const registry = { current: new Map([['self', actor(pose(0), 1)], ['leader', actor(pose(8), 2)]]) }
@@ -219,6 +219,27 @@ assert(
   'lower-priority vehicle slows before perpendicular conflict point',
 )
 assert(!vehicleBodiesOverlap(pose(0), 4.82, 1.9, pose(0, -1.75, Math.PI), 4.82, 1.9))
+
+const straightPose = distance => pose(distance)
+assert.equal(curvatureSpeedLimit(straightPose, 6), 6, 'straight road keeps cruise speed')
+const turningPose = distance => ({
+  position: [distance, 0, 0],
+  rotationY: distance < 4 ? 0 : distance < 8 ? 0.35 : 0.72,
+})
+assert(curvatureSpeedLimit(turningPose, 6) < 6, 'tight bend reduces target speed before turn')
+
+assert(shouldStopForSignal({
+  red: true, yellow: false, green: false, speed: 4, distanceToStopLine: 8, hasEnteredIntersection: false,
+}), 'red requires a stop')
+assert(shouldStopForSignal({
+  red: false, yellow: true, green: false, speed: 2, distanceToStopLine: 8, hasEnteredIntersection: false,
+}), 'slow distant car stops on yellow')
+assert(!shouldStopForSignal({
+  red: false, yellow: true, green: false, speed: 7, distanceToStopLine: 3, hasEnteredIntersection: false,
+}), 'fast close car clears yellow dilemma zone')
+assert(!shouldStopForSignal({
+  red: true, yellow: false, green: false, speed: 4, distanceToStopLine: -1, hasEnteredIntersection: true,
+}), 'vehicle already inside intersection clears it')
 
 // Roundabout approach must yield early to circulating traffic, not only at collision distance.
 const westApproachPose = pose(37, ROUNDABOUT.center[1], 0)
