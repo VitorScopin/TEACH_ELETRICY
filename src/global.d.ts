@@ -1,10 +1,43 @@
 import type { IntersectionTrafficState, PlcConfig } from './types'
 
+type PersistedEnvironment = {
+  hour: number
+  autoTime: boolean
+  timeSpeed: number
+  rain: number
+  wind: number
+  windDirection: number
+}
+
+type ProjectSnapshot = {
+  version?: number
+  savedAt?: string
+  config?: PlcConfig
+  graphicsQuality?: 'low' | 'medium' | 'high'
+  targetFps?: number
+  environment?: PersistedEnvironment
+}
+
 export {}
 
 declare global {
   interface Window {
     teachElectrify?: {
+      project: {
+        load: () => Promise<{
+          ok: boolean
+          snapshot?: ProjectSnapshot | null
+          path?: string
+          message?: string
+        }>
+        save: (snapshot: ProjectSnapshot) => Promise<{
+          ok: boolean
+          path?: string
+          savedAt?: string
+          message?: string
+        }>
+        reset: () => Promise<{ ok: boolean; path?: string; message?: string }>
+      }
       windowControls: {
         minimize: () => Promise<{ ok: boolean }>
         toggleMaximize: () => Promise<{ ok: boolean; maximized: boolean }>
