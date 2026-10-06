@@ -343,14 +343,14 @@ const CITY_BUILDINGS: CityBuilding[] = [
   { district: 'se', variant: 'medium', position: [26.0, 0.18, 10.4], rotationY: -Math.PI / 2, scale: 0.72 },
 
   // SEGUNDA LINHA URBANA — só em qualidade alta, preenchendo o horizonte sem poluir o cruzamento
-  { district: 'outer', variant: 'medium', position: [-27.0, 0.18, -29.5], rotationY: Math.PI, scale: 0.88 },
-  { district: 'outer', variant: 'large',  position: [-16.0, 0.18, -29.8], rotationY: Math.PI, scale: 0.90 },
-  { district: 'outer', variant: 'small',  position: [15.5, 0.18, -29.2], rotationY: Math.PI, scale: 0.90 },
-  { district: 'outer', variant: 'medium', position: [26.5, 0.18, -29.5], rotationY: Math.PI, scale: 0.88 },
-  { district: 'outer', variant: 'small',  position: [-27.0, 0.18, 29.0], rotationY: 0, scale: 0.88 },
-  { district: 'outer', variant: 'medium', position: [-16.2, 0.18, 29.5], rotationY: 0, scale: 0.86 },
-  { district: 'outer', variant: 'large',  position: [16.5, 0.18, 29.6], rotationY: 0, scale: 0.90 },
-  { district: 'outer', variant: 'medium', position: [27.0, 0.18, 29.2], rotationY: 0, scale: 0.86 },
+  { district: 'outer', variant: 'medium', position: [-27.0, 0.18, -36.0], rotationY: Math.PI, scale: 0.88 },
+  { district: 'outer', variant: 'large',  position: [-16.0, 0.18, -36.2], rotationY: Math.PI, scale: 0.90 },
+  { district: 'outer', variant: 'small',  position: [15.5, 0.18, -35.8], rotationY: Math.PI, scale: 0.90 },
+  { district: 'outer', variant: 'medium', position: [26.5, 0.18, -36.0], rotationY: Math.PI, scale: 0.88 },
+  { district: 'outer', variant: 'small',  position: [-27.0, 0.18, 35.8], rotationY: 0, scale: 0.88 },
+  { district: 'outer', variant: 'medium', position: [-16.2, 0.18, 36.0], rotationY: 0, scale: 0.86 },
+  { district: 'outer', variant: 'large',  position: [16.5, 0.18, 36.2], rotationY: 0, scale: 0.90 },
+  { district: 'outer', variant: 'medium', position: [27.0, 0.18, 35.8], rotationY: 0, scale: 0.86 },
 ]
 
 function CityBlockPad({
@@ -726,7 +726,7 @@ function RoadScene({
     <>
       {/* World base */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.07, 0]}>
-        <planeGeometry args={[94, 72]} />
+        <planeGeometry args={[94, 86]} />
         <meshStandardMaterial color="#10191e" roughness={0.99} />
       </mesh>
 
