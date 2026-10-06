@@ -8,9 +8,10 @@ import {
   type VehicleKind,
 } from '../simulation/trafficWorld'
 import type { IntersectionTrafficState, SignalId, TrafficState } from '../types'
-import { CityDistricts } from './world/CityDistricts'
+import { CityDistricts, RoundaboutDistrict } from './world/CityDistricts'
 import { CityLife } from './world/CityLife'
-import { CITY_LIMITS, CITY_ROADS } from './world/cityLayout'
+import { BOULEVARD_START, CITY_LIMITS } from './world/cityLayout'
+import { horizontalRoadPose, HORIZONTAL_ROAD_EXIT } from './world/roadGeometry'
 import { UrbanRoadNetwork } from './world/RoadNetwork'
 import { Planter, StreetLamp, Tree } from './world/StreetFurniture'
 import {
@@ -203,99 +204,6 @@ function ArrowMark({
   )
 }
 
-function SidewalkCorner({
-  x,
-  z,
-}: {
-  x: number
-  z: number
-}) {
-  const sx = (TRAFFIC_WORLD.roadLength - TRAFFIC_WORLD.roadWidth) / 2
-  const sz = (TRAFFIC_WORLD.worldDepth - TRAFFIC_WORLD.roadWidth) / 2
-  const centerX = x * (TRAFFIC_WORLD.roadWidth / 2 + sx / 2)
-  const centerZ = z * (TRAFFIC_WORLD.roadWidth / 2 + sz / 2)
-
-  return (
-    <group>
-      <mesh position={[centerX, TRAFFIC_WORLD.sidewalkHeight / 2, centerZ]}>
-        <boxGeometry args={[sx, TRAFFIC_WORLD.sidewalkHeight, sz]} />
-        <meshStandardMaterial color="#73797a" roughness={0.94} />
-      </mesh>
-
-      {/* curb edges along both road faces */}
-      <mesh
-       
-        position={[
-          x * (TRAFFIC_WORLD.roadWidth / 2 + TRAFFIC_WORLD.curbWidth / 2),
-          TRAFFIC_WORLD.curbHeight / 2,
-          centerZ,
-        ]}
-      >
-        <boxGeometry args={[TRAFFIC_WORLD.curbWidth, TRAFFIC_WORLD.curbHeight, sz]} />
-        <meshStandardMaterial color="#9ca0a0" roughness={0.9} />
-      </mesh>
-      <mesh
-       
-        position={[
-          centerX,
-          TRAFFIC_WORLD.curbHeight / 2,
-          z * (TRAFFIC_WORLD.roadWidth / 2 + TRAFFIC_WORLD.curbWidth / 2),
-        ]}
-      >
-        <boxGeometry args={[sx, TRAFFIC_WORLD.curbHeight, TRAFFIC_WORLD.curbWidth]} />
-        <meshStandardMaterial color="#9ca0a0" roughness={0.9} />
-      </mesh>
-
-      {/* subtle tile joints */}
-      {[-2.4, 0, 2.4].map((offset) => (
-        <mesh
-          key={`x-${offset}`}
-          position={[centerX, TRAFFIC_WORLD.sidewalkHeight + 0.006, centerZ + offset]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <planeGeometry args={[sx - 0.5, 0.025]} />
-          <meshBasicMaterial color="#555c5d" transparent opacity={0.38} />
-        </mesh>
-      ))}
-      {[-3.4, 0, 3.4].map((offset) => (
-        <mesh
-          key={`z-${offset}`}
-          position={[centerX + offset, TRAFFIC_WORLD.sidewalkHeight + 0.006, centerZ]}
-          rotation={[-Math.PI / 2, 0, Math.PI / 2]}
-        >
-          <planeGeometry args={[sz - 0.5, 0.025]} />
-          <meshBasicMaterial color="#555c5d" transparent opacity={0.38} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function CornerCurb({
-  x,
-  z,
-  rotationY,
-}: {
-  x: number
-  z: number
-  rotationY: number
-}) {
-  return (
-    <mesh
-      position={[
-        x * (TRAFFIC_WORLD.roadWidth / 2 + 1.15),
-        TRAFFIC_WORLD.curbHeight / 2,
-        z * (TRAFFIC_WORLD.roadWidth / 2 + 1.15),
-      ]}
-      rotation={[Math.PI / 2, rotationY, 0]}
-     
-    >
-      <torusGeometry args={[1.15, 0.14, 8, 24, Math.PI / 2]} />
-      <meshStandardMaterial color="#a5a7a5" roughness={0.9} />
-    </mesh>
-  )
-}
-
 function UrbanProps({
   dense = false,
   nightFactor = 0,
@@ -304,15 +212,12 @@ function UrbanProps({
   nightFactor?: number
 }) {
   const trees: Array<[number, number, number]> = [
-    [-14, 0.18, -10.8], [14.5, 0.18, -10.5], [-14.5, 0.18, 11.2], [14, 0.18, 11],
-    [-28, 0.18, -17], [-20, 0.18, -18], [20, 0.18, -18], [29, 0.18, -17],
-    [-29, 0.18, 17], [-20, 0.18, 18], [20, 0.18, 18], [29, 0.18, 17],
-    [-38, 0.18, -17], [38, 0.18, 17], [-38, 0.18, 17], [38, 0.18, -17],
+    [-14, 0.04, 10.8], [14, 0.04, 11], [-38, 0.04, -35],
+    [38, 0.04, 23], [-38, 0.04, 34], [18, 0.04, -46],
   ]
   const lamps: Array<[number, number, number]> = [
-    [-12.4, 0.18, -8.8], [12.6, 0.18, -8.8], [-12.5, 0.18, 8.9], [12.5, 0.18, 8.9],
-    [-24, 0.18, -8.8], [24, 0.18, -8.8], [-24, 0.18, 8.9], [24, 0.18, 8.9],
-    [-36, 0.18, -8.8], [36, 0.18, -8.8], [-36, 0.18, 8.9], [36, 0.18, 8.9],
+    [-12.4, 0.04, -8.8], [12.6, 0.04, -8.8], [-12.5, 0.04, 8.9], [12.5, 0.04, 8.9],
+    [-24, 0.04, -8.8], [-24, 0.04, 8.9], [-36, 0.04, 8.9],
   ]
 
   return (
@@ -338,7 +243,7 @@ function UrbanProps({
             <boxGeometry args={[8, 0.32, 3.2]} />
             <meshStandardMaterial color="#253c32" roughness={1} />
           </mesh>
-          <mesh position={[31, 0.34, -14]}>
+          <mesh position={[18, 0.34, -44]}>
             <boxGeometry args={[8, 0.32, 3.2]} />
             <meshStandardMaterial color="#253c32" roughness={1} />
           </mesh>
@@ -365,25 +270,25 @@ function RoadScene({
   return (
     <>
       {/* World base */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.07, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[CITY_LIMITS.width, CITY_LIMITS.depth]} />
         <meshStandardMaterial color="#10191e" roughness={0.99} />
       </mesh>
 
       {/* Asphalt roads crossing at 90 degrees */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[TRAFFIC_WORLD.roadLength, TRAFFIC_WORLD.roadWidth]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - CITY_LIMITS.width / 2) / 2, 0.03, 0]}>
+        <planeGeometry args={[CITY_LIMITS.width / 2 + BOULEVARD_START, TRAFFIC_WORLD.roadWidth]} />
         <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]}>
-        <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.worldDepth]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.032, 0]}>
+        <planeGeometry args={[TRAFFIC_WORLD.roadWidth, CITY_LIMITS.depth]} />
         <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
       </mesh>
 
       {rain > 0.02 && (
         <>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.016, 0]}>
-            <planeGeometry args={[TRAFFIC_WORLD.roadLength, TRAFFIC_WORLD.roadWidth]} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - CITY_LIMITS.width / 2) / 2, 0.034, 0]}>
+            <planeGeometry args={[CITY_LIMITS.width / 2 + BOULEVARD_START, TRAFFIC_WORLD.roadWidth]} />
             <meshStandardMaterial
               color="#172027"
               transparent
@@ -392,8 +297,8 @@ function RoadScene({
               metalness={Math.min(0.32, rain * 0.28)}
             />
           </mesh>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
-            <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.worldDepth]} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.035, 0]}>
+            <planeGeometry args={[TRAFFIC_WORLD.roadWidth, CITY_LIMITS.depth]} />
             <meshStandardMaterial
               color="#172027"
               transparent
@@ -405,22 +310,11 @@ function RoadScene({
         </>
       )}
 
-      {/* Four independent sidewalk quadrants */}
-      <SidewalkCorner x={-1} z={-1} />
-      <SidewalkCorner x={1} z={-1} />
-      <SidewalkCorner x={-1} z={1} />
-      <SidewalkCorner x={1} z={1} />
-
-      <CornerCurb x={-1} z={-1} rotationY={0} />
-      <CornerCurb x={1} z={-1} rotationY={Math.PI / 2} />
-      <CornerCurb x={1} z={1} rotationY={Math.PI} />
-      <CornerCurb x={-1} z={1} rotationY={Math.PI * 1.5} />
-
       {/* Double yellow center lines, interrupted before the crosswalk/intersection zone */}
       {[-0.13, 0.13].map((z) => (
         <group key={`hy-${z}`}>
           <RoadMark position={[-21.5, 0.036, z]} size={[21, 0.09]} color="#e4bf3d" />
-          <RoadMark position={[21.5, 0.036, z]} size={[21, 0.09]} color="#e4bf3d" />
+          <RoadMark position={[(11 + BOULEVARD_START) / 2, 0.036, z]} size={[BOULEVARD_START - 11, 0.09]} color="#e4bf3d" />
         </group>
       ))}
       {[-0.13, 0.13].map((x) => (
@@ -432,7 +326,7 @@ function RoadScene({
 
       {/* Dashed white lane dividers */}
       {[-lane, lane].map((z) =>
-        dashX.map((x) => (
+        dashX.filter((x) => x < BOULEVARD_START - 1).map((x) => (
           <RoadMark key={`hd-${z}-${x}`} position={[x, 0.038, z]} size={[1.9, 0.08]} />
         )),
       )}
@@ -451,7 +345,7 @@ function RoadScene({
       {[halfRoad - 0.14, -halfRoad + 0.14].map((z) => (
         <group key={`edge-h-${z}`}>
           <RoadMark position={[-21, 0.037, z]} size={[22, 0.1]} />
-          <RoadMark position={[21, 0.037, z]} size={[22, 0.1]} />
+          <RoadMark position={[(10 + BOULEVARD_START) / 2, 0.037, z]} size={[BOULEVARD_START - 10, 0.1]} />
         </group>
       ))}
       {[halfRoad - 0.14, -halfRoad + 0.14].map((x) => (
@@ -497,13 +391,10 @@ function RoadScene({
         <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} />
       </mesh>
 
+      <RoundaboutDistrict rain={rain} nightFactor={nightFactor} />
+      <UrbanRoadNetwork quality={quality} rain={rain} nightFactor={nightFactor} />
       {quality !== 'low' && (
         <>
-          <UrbanRoadNetwork
-            quality={quality}
-            rain={rain}
-            nightFactor={nightFactor}
-          />
           <UrbanProps dense={quality === 'high'} nightFactor={nightFactor} />
           <CityDistricts quality={quality} rain={rain} nightFactor={nightFactor} />
         </>
@@ -525,78 +416,11 @@ type FlowDefinition = {
 const VERTICAL_SPAWN = -(TRAFFIC_WORLD.worldDepth / 2 - 1)
 const VERTICAL_EXIT = TRAFFIC_WORLD.worldDepth / 2 - 1
 
-const EAST_ROAD_CURVE = new THREE.CatmullRomCurve3(
-  CITY_ROADS.eastBoulevard.points.map(
-    ([x, z]) => new THREE.Vector3(x, 0.02, z),
-  ),
-  false,
-  'catmullrom',
-  0.32,
-)
-
-function boulevardPose(t: number, laneOffset: number, reverse = false) {
-  const clamped = THREE.MathUtils.clamp(t, 0, 1)
-  const point = EAST_ROAD_CURVE.getPointAt(clamped)
-  const tangent = EAST_ROAD_CURVE.getTangentAt(
-    Math.min(0.999, Math.max(0.001, clamped)),
-  )
-  const length = Math.max(0.0001, Math.hypot(tangent.x, tangent.z))
-  const nx = -tangent.z / length
-  const nz = tangent.x / length
-  const signedOffset = reverse ? -laneOffset : laneOffset
-
-  return {
-    position: [
-      point.x + nx * signedOffset,
-      0.02,
-      point.z + nz * signedOffset,
-    ] as [number, number, number],
-    rotationY: -Math.atan2(tangent.z, tangent.x) + (reverse ? Math.PI : 0),
-  }
-}
-
-/**
- * Keep the PLC-controlled intersection geometrically straight so stop-line math
- * remains exact. Only after the car clears the intersection does it transition
- * onto the urban boulevard spline.
- */
-function horizontalRoadPose(
-  progress: number,
-  laneOffset: number,
-  reverse = false,
-) {
-  const transition = TRAFFIC_WORLD.intersectionHalf
-
-  if (!reverse) {
-    if (progress <= transition) {
-      return {
-        position: [progress, 0.02, laneOffset] as [number, number, number],
-        rotationY: 0,
-      }
-    }
-
-    const t = (progress - transition) / (TRAFFIC_WORLD.exitX - transition)
-    return boulevardPose(t, laneOffset, false)
-  }
-
-  if (progress >= -transition) {
-    return {
-      position: [-progress, 0.02, -laneOffset] as [number, number, number],
-      rotationY: Math.PI,
-    }
-  }
-
-  const t =
-    (-transition - progress) /
-    (-transition - TRAFFIC_WORLD.spawnX)
-  return boulevardPose(t, laneOffset, true)
-}
-
 const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
   eastbound: {
     id: 'eastbound',
     spawn: TRAFFIC_WORLD.spawnX,
-    exit: TRAFFIC_WORLD.exitX,
+    exit: HORIZONTAL_ROAD_EXIT,
     stopProgress: TRAFFIC_GEOMETRY.westStopLineX,
     rotationY: 0,
     signalId: 'west',
@@ -604,7 +428,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
   },
   westbound: {
     id: 'westbound',
-    spawn: TRAFFIC_WORLD.spawnX,
+    spawn: -HORIZONTAL_ROAD_EXIT,
     exit: TRAFFIC_WORLD.exitX,
     stopProgress: -TRAFFIC_GEOMETRY.eastStopLineX,
     rotationY: Math.PI,
@@ -618,7 +442,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
     stopProgress: -TRAFFIC_GEOMETRY.northStopLineZ,
     rotationY: Math.PI / 2,
     signalId: 'north',
-    toWorld: (progress) => [TRAFFIC_WORLD.eastboundLaneZ, 0.02, -progress],
+    toWorld: (progress) => [TRAFFIC_WORLD.eastboundLaneZ, 0.04, -progress],
   },
   southbound: {
     id: 'southbound',
@@ -627,7 +451,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
     stopProgress: TRAFFIC_GEOMETRY.southStopLineZ,
     rotationY: -Math.PI / 2,
     signalId: 'south',
-    toWorld: (progress) => [-TRAFFIC_WORLD.eastboundLaneZ, 0.02, progress],
+    toWorld: (progress) => [-TRAFFIC_WORLD.eastboundLaneZ, 0.04, progress],
   },
 }
 
@@ -648,10 +472,10 @@ function applyWorldPosition(group: THREE.Group, flowId: FlowId, progress: number
       break
     }
     case 'northbound':
-      group.position.set(TRAFFIC_WORLD.eastboundLaneZ, 0.02, -progress)
+      group.position.set(TRAFFIC_WORLD.eastboundLaneZ, 0.04, -progress)
       break
     case 'southbound':
-      group.position.set(-TRAFFIC_WORLD.eastboundLaneZ, 0.02, progress)
+      group.position.set(-TRAFFIC_WORLD.eastboundLaneZ, 0.04, progress)
       break
   }
 }
@@ -1107,7 +931,7 @@ function Scene({
   return (
     <>
       <color attach="background" args={[palette.sky]} />
-      <fog attach="fog" args={[palette.fog, 48 - environment.rain * 10, 155 - environment.rain * 42]} />
+      <fog attach="fog" args={[palette.fog, CITY_LIMITS.width, Math.hypot(CITY_LIMITS.width, CITY_LIMITS.depth) * (1.7 - environment.rain * 0.2)]} />
 
       <ambientLight intensity={palette.ambient} />
       <hemisphereLight
@@ -1151,12 +975,12 @@ function Scene({
 
       <OrbitControls
         makeDefault
-        target={[8, 0.9, -8]}
+        target={[0, 0.9, -4]}
         enablePan
         enableRotate
         enableZoom
         minDistance={12}
-        maxDistance={118}
+        maxDistance={Math.hypot(CITY_LIMITS.width, CITY_LIMITS.depth)}
         maxPolarAngle={Math.PI / 2 - 0.08}
         panSpeed={0.9}
         rotateSpeed={0.65}
@@ -1179,7 +1003,7 @@ export function TrafficSimulation3D({
         key={quality}
         frameloop="demand"
         dpr={quality === 'low' ? 0.8 : quality === 'medium' ? 1 : 1.25}
-        camera={{ position: [35, 31, 47], fov: 50 }}
+        camera={{ position: [65, 85, 100], fov: 50 }}
         gl={{
           antialias: quality === 'high',
           alpha: false,

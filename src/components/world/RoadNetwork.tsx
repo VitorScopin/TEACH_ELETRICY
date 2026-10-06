@@ -1,25 +1,17 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { CITY_ROADS, ROUNDABOUT, type CityRoadDefinition, type Vec2Point } from './cityLayout'
+import { CITY_ROADS, MAIN_ROADS, DISTRICTS, PEDESTRIAN_PATHS, type CityRoadDefinition, type Vec2Point } from './cityLayout'
+import { roadCurve as curveFrom, roadPose, roadWidthAt } from './roadGeometry'
 import { StreetLamp, Tree } from './StreetFurniture'
 
-function curveFrom(points: Vec2Point[], y = 0) {
-  return new THREE.CatmullRomCurve3(
-    points.map(([x, z]) => new THREE.Vector3(x, y, z)),
-    false,
-    'catmullrom',
-    0.35,
-  )
-}
-
-function buildRibbonGeometry(points: Vec2Point[], width: number, y = 0) {
+function buildRibbonGeometry(points: Vec2Point[], width: number, y = 0, endWidth = width) {
   const curve = curveFrom(points, y)
-  const samples = curve.getPoints(Math.max(28, points.length * 18))
-  const half = width / 2
+  const samples = curve.getSpacedPoints(Math.min(256, Math.max(28, points.length * 18)))
   const vertices: number[] = []
   const indices: number[] = []
 
   for (let i = 0; i < samples.length; i++) {
+    const half = THREE.MathUtils.lerp(width, endWidth, THREE.MathUtils.smoothstep(i / (samples.length - 1), 0.15, 0.8)) / 2
     const current = samples[i]
     const prev = samples[Math.max(0, i - 1)]
     const next = samples[Math.min(samples.length - 1, i + 1)]
@@ -46,16 +38,12 @@ function buildRibbonGeometry(points: Vec2Point[], width: number, y = 0) {
   return geometry
 }
 
-function offsetPath(points: Vec2Point[], offset: number): Vec2Point[] {
-  return points.map(([x, z], index) => {
-    const prev = points[Math.max(0, index - 1)]
-    const next = points[Math.min(points.length - 1, index + 1)]
-    const dx = next[0] - prev[0]
-    const dz = next[1] - prev[1]
-    const length = Math.max(0.0001, Math.hypot(dx, dz))
-    const nx = -dz / length
-    const nz = dx / length
-    return [x + nx * offset, z + nz * offset]
+function offsetPath(road: CityRoadDefinition, fraction: number): Vec2Point[] {
+  const curve = curveFrom(road.points)
+  return Array.from({ length: 161 }, (_, i) => {
+    const t = i / 160
+    const { point } = roadPose(curve, t, roadWidthAt(road, t) * fraction)
+    return [point.x, point.z]
   })
 }
 
@@ -63,24 +51,26 @@ function RoadRibbon({
   road,
   rain = 0,
   color = '#2a3033',
+  surface = true,
 }: {
   road: CityRoadDefinition
   rain?: number
   color?: string
+  surface?: boolean
 }) {
   const sidewalkWidth = road.sidewalkWidth ?? 0
   const curbWidth = road.curbWidth ?? 0
   const sidewalkGeometry = useMemo(
-    () => buildRibbonGeometry(road.points, road.width + 2 * (curbWidth + sidewalkWidth), 0.012),
-    [road.points, road.width, curbWidth, sidewalkWidth],
+    () => buildRibbonGeometry(road.points, road.width + 2 * (curbWidth + sidewalkWidth), 0.012, (road.endWidth ?? road.width) + 2 * (curbWidth + sidewalkWidth)),
+    [road.points, road.width, road.endWidth, curbWidth, sidewalkWidth],
   )
   const curbGeometry = useMemo(
-    () => buildRibbonGeometry(road.points, road.width + 2 * curbWidth, 0.020),
-    [road.points, road.width, curbWidth],
+    () => buildRibbonGeometry(road.points, road.width + 2 * curbWidth, 0.020, (road.endWidth ?? road.width) + 2 * curbWidth),
+    [road.points, road.width, road.endWidth, curbWidth],
   )
   const roadGeometry = useMemo(
-    () => buildRibbonGeometry(road.points, road.width, 0.028),
-    [road.points, road.width],
+    () => buildRibbonGeometry(road.points, road.width, 0.028, road.endWidth ?? road.width),
+    [road.points, road.width, road.endWidth],
   )
 
   return (
@@ -95,13 +85,14 @@ function RoadRibbon({
           <meshStandardMaterial color="#c1c3be" roughness={0.93} />
         </mesh>
       )}
-      <mesh geometry={roadGeometry}>
+      {surface && <mesh geometry={roadGeometry}>
         <meshStandardMaterial
           color={color}
           roughness={Math.max(0.24, 0.9 - rain * 0.54)}
           metalness={Math.min(0.2, rain * 0.18)}
         />
       </mesh>
+      }
     </group>
   )
 }
@@ -153,31 +144,18 @@ function MarkingRibbon({
 }
 
 function RoadMarkings({ road }: { road: CityRoadDefinition }) {
-  const laneWidth = road.laneWidth ?? 3.2
-  const dividerCount = Math.max(1, Math.round(road.width / laneWidth) - 1)
-  const offsets = Array.from(
-    { length: dividerCount },
-    (_, index) => (index + 1) * (road.width / (dividerCount + 1)) - road.width / 2,
-  )
-
+  const center = useMemo(() => offsetPath(road, 0), [road])
+  const edges = useMemo(() => [-0.485, 0.485].map(f => offsetPath(road, f)), [road])
+  const dividers = useMemo(() => [-0.25, 0.25].map(f => offsetPath(road, f).slice(0, 85)), [road])
   return (
     <>
-      {offsets.map((offset) => (
-        <MarkingRibbon
-          key={offset}
-          points={offsetPath(road.points, offset)}
-          width={0.10}
-          dashed
-        />
+      <MarkingRibbon points={center} width={0.12} color="#e4bf3d" />
+      {edges.map((points, index) => (
+        <MarkingRibbon key={index} points={points} width={0.10} />
       ))}
-      <MarkingRibbon
-        points={offsetPath(road.points, road.width / 2 - 0.18)}
-        width={0.10}
-      />
-      <MarkingRibbon
-        points={offsetPath(road.points, -road.width / 2 + 0.18)}
-        width={0.10}
-      />
+      {road.width > 10 && dividers.map((points, index) => (
+        <MarkingRibbon key={index} points={points} dashed />
+      ))}
     </>
   )
 }
@@ -198,7 +176,7 @@ function LandscapedMedian({
       <mesh geometry={geometry}>
         <meshStandardMaterial color="#5b7652" roughness={1} />
       </mesh>
-      {points.slice(1, -1).map(([x, z], index) => (
+      {points.filter((_, i) => i > 0 && i < points.length - 1 && i % 16 === 0).map(([x, z], index) => (
         <group key={index}>
           <Tree position={[x, 0.08, z]} scale={0.40 + (index % 2) * 0.08} />
           <StreetLamp
@@ -298,35 +276,11 @@ function ZebraCrossingLocal({
   )
 }
 
-function Island({
-  position,
-  rotationY = 0,
-  scale = [1, 1] as [number, number],
-}: {
-  position: [number, number, number]
-  rotationY?: number
-  scale?: [number, number]
-}) {
-  return (
-    <group position={position} rotation={[0, rotationY, 0]} scale={[scale[0], 1, scale[1]]}>
-      <mesh position={[0, 0.08, 0]}>
-        <cylinderGeometry args={[2.3, 2.45, 0.16, 32]} />
-        <meshStandardMaterial color="#8c9491" roughness={0.9} />
-      </mesh>
-      <mesh position={[0, 0.19, 0]}>
-        <cylinderGeometry args={[2.08, 2.18, 0.18, 32]} />
-        <meshStandardMaterial color="#55724d" roughness={1} />
-      </mesh>
-      <Tree position={[0, 0.2, 0]} scale={0.62} />
-    </group>
-  )
-}
-
 function CivicGarden({ nightFactor }: { nightFactor: number }) {
   return (
-    <group position={[-24.5, 0.04, 15.3]} rotation={[0, -0.18, 0]}>
+    <group position={DISTRICTS.garden.position}>
       <mesh position={[0, 0.10, 0]}>
-        <boxGeometry args={[15.5, 0.20, 7.0]} />
+        <boxGeometry args={[DISTRICTS.garden.size[0], 0.20, DISTRICTS.garden.size[1]]} />
         <meshStandardMaterial color="#587451" roughness={1} />
       </mesh>
 
@@ -352,6 +306,11 @@ function CivicGarden({ nightFactor }: { nightFactor: number }) {
   )
 }
 
+const BOULEVARD_MEDIAN = offsetPath(CITY_ROADS.eastBoulevard, 0).slice(25, 85)
+const MARKET_FOOTPATHS: CityRoadDefinition[] = PEDESTRIAN_PATHS[0].map((point, i, points) => ({
+  id: `market-footpath-${i}`, points: [point, points[(i + 1) % points.length]], width: 1.4,
+}))
+
 export function UrbanRoadNetwork({
   rain,
   nightFactor,
@@ -361,7 +320,6 @@ export function UrbanRoadNetwork({
   nightFactor: number
   quality: 'low' | 'medium' | 'high'
 }) {
-  if (quality === 'low') return null
 
   const boulevard = CITY_ROADS.eastBoulevard
   const parkRoad = CITY_ROADS.westParkRoad
@@ -371,18 +329,24 @@ export function UrbanRoadNetwork({
 
   return (
     <>
+      {MAIN_ROADS.map((road) => <RoadRibbon key={road.id} road={road} surface={false} />)}
       <RoadRibbon road={boulevard} rain={rain} />
       <RoadMarkings road={boulevard} />
 
-      <LandscapedMedian
-        points={boulevard.points.slice(1, -2)}
+      {quality !== 'low' && <LandscapedMedian
+        points={BOULEVARD_MEDIAN}
         width={1.05}
         nightFactor={nightFactor}
-      />
+      />}
 
       <RoadRibbon road={parkRoad} rain={rain} color="#252c2f" />
       <RoadMarkings road={parkRoad} />
-      <CivicGarden nightFactor={nightFactor} />
+      {quality !== 'low' && <>
+        <CivicGarden nightFactor={nightFactor} />
+        {MARKET_FOOTPATHS.map((road) => (
+          <RoadRibbon key={road.id} road={road} color="#9ca3a0" />
+        ))}
+      </>}
 
       {/* Three real continuations after the roundabout. */}
       <RoadRibbon road={northAccess} rain={rain} />
@@ -392,32 +356,9 @@ export function UrbanRoadNetwork({
       <RoadRibbon road={southAccess} rain={rain} />
       <RoadMarkings road={southAccess} />
 
-      {/* Channelising islands guide turning traffic rather than decorating a park. */}
-      <Island position={[31.2, 0, -4.4]} rotationY={0.42} scale={[1.45, 0.66]} />
-      <Island position={[35.5, 0, -18.7]} rotationY={-0.25} scale={[1.55, 0.68]} />
-      <Island
-        position={[ROUNDABOUT.entryWest[0] - 2.4, 0, ROUNDABOUT.entryWest[1] + 4.4]}
-        rotationY={-0.18}
-        scale={[1.1, 0.58]}
-      />
-
-      <YellowBox position={[-31, 0.066, 4.1]} size={[7.0, 6.2]} rotationY={0.08} />
-
-      <ZebraCrossingLocal position={[-31.4, 0, 0.5]} rotationY={Math.PI / 2} width={7.6} depth={3.0} />
-      <ZebraCrossingLocal position={[-36.0, 0, 9.5]} rotationY={0.12} width={6.8} depth={2.8} />
-
-      {/* Crossings sit on straight approach sections, not inside the circle. */}
-      <ZebraCrossingLocal
-        position={[ROUNDABOUT.entryWest[0] - 2.0, 0, ROUNDABOUT.entryWest[1]]}
-        rotationY={Math.PI / 2}
-        width={7.0}
-        depth={2.5}
-      />
-      <ZebraCrossingLocal
-        position={[ROUNDABOUT.entryNorth[0], 0, ROUNDABOUT.entryNorth[1] - 2.0]}
-        width={7.0}
-        depth={2.5}
-      />
+      <YellowBox position={[-42, 0.066, 0]} size={[7.0, 12.0]} />
+      <ZebraCrossingLocal position={[-42, 0, 11]} width={7.4} depth={2.5} />
+      <ZebraCrossingLocal position={[48, 0, -43]} width={7.2} depth={2.5} />
     </>
   )
 }

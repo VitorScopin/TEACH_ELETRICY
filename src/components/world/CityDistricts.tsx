@@ -1,7 +1,7 @@
 import { useGLTF } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import * as THREE from 'three'
-import { ROUNDABOUT, SUPERMARKET_PARKING_SPOTS } from './cityLayout'
+import { ROUNDABOUT, SUPERMARKET, DISTRICTS, CITY_FRAME_BUILDINGS, SUPERMARKET_PARKING_SPOTS } from './cityLayout'
 import { Bench, BusStop, Planter, StreetLamp, TrashBin, Tree } from './StreetFurniture'
 
 type Quality = 'low' | 'medium' | 'high'
@@ -134,23 +134,6 @@ function GroundArrow({
   )
 }
 
-function YieldMark({
-  position,
-  rotationY = 0,
-}: {
-  position: [number, number, number]
-  rotationY?: number
-}) {
-  return (
-    <group position={position} rotation={[0, rotationY, 0]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.72, 0.83, 3]} />
-        <meshBasicMaterial color="#f1f0e8" toneMapped={false} />
-      </mesh>
-    </group>
-  )
-}
-
 function WetOverlay({
   position,
   size,
@@ -180,7 +163,7 @@ function SupermarketBuilding({ nightFactor }: { nightFactor: number }) {
   const sign = useSignTexture('SUPERMERCADO', '#ef3d36')
 
   return (
-    <group position={[-21.5, 0.18, -18.2]}>
+    <group position={SUPERMARKET.position}>
       <mesh position={[0, 2.25, 0]}>
         <boxGeometry args={[18.5, 4.5, 6.2]} />
         <meshStandardMaterial color="#d8d8d3" roughness={0.72} />
@@ -252,17 +235,17 @@ function ParkingSpace({
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[2.65, 5.0]} />
+        <planeGeometry args={[5.0, 2.65]} />
         <meshBasicMaterial color={accessible ? '#255e84' : '#32383b'} toneMapped={false} />
       </mesh>
       {[-1.28, 1.28].map((x) => (
-        <mesh key={x} position={[x, 0.012, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[0.06, 5.0]} />
+        <mesh key={x} position={[0, 0.012, x]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[5.0, 0.06]} />
           <meshBasicMaterial color="#e7e2c7" toneMapped={false} />
         </mesh>
       ))}
-      <mesh position={[0, 0.014, -2.46]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[2.6, 0.06]} />
+      <mesh position={[2.46, 0.014, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[0.06, 2.6]} />
         <meshBasicMaterial color="#e7e2c7" toneMapped={false} />
       </mesh>
     </group>
@@ -278,11 +261,11 @@ function SupermarketParking({
 }) {
   return (
     <group>
-      <mesh position={[-21.6, 0.175, -11.9]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[19.5, 8.2]} />
+      <mesh position={SUPERMARKET.parkingCenter} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={SUPERMARKET.parkingSize} />
         <meshStandardMaterial color="#31383b" roughness={0.9} />
       </mesh>
-      <WetOverlay position={[-21.6, 0.195, -11.9]} size={[19.5, 8.2]} rain={rain} />
+      <WetOverlay position={[SUPERMARKET.parkingCenter[0], 0.035, SUPERMARKET.parkingCenter[2]]} size={SUPERMARKET.parkingSize} rain={rain} />
 
       {SUPERMARKET_PARKING_SPOTS.map((spot) => (
         <ParkingSpace
@@ -293,42 +276,23 @@ function SupermarketParking({
         />
       ))}
 
-      {[-29.6, -13.6].map((x) => (
-        <group key={x} position={[x, 0.2, -8.0]}>
-          <mesh position={[0, 0.24, 0]}>
-            <boxGeometry args={[0.55, 0.48, 5.8]} />
-            <meshStandardMaterial color="#334d3c" roughness={1} />
-          </mesh>
-          <Tree position={[0, 0.25, -1.55]} scale={0.48} />
-          <Tree position={[0, 0.25, 1.55]} scale={0.48} />
-        </group>
-      ))}
-
-      <group position={[-21.5, 0.2, -8.35]}>
-        <mesh position={[0, 1.4, 0]}>
-          <boxGeometry args={[5.4, 0.12, 2.0]} />
-          <meshStandardMaterial color="#667379" metalness={0.55} roughness={0.38} />
+      {[SUPERMARKET.entryX, SUPERMARKET.exitX].map((x) => (
+        <mesh key={x} position={[x, 0.034, -10]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[SUPERMARKET.drivewayWidth, 19]} />
+          <meshStandardMaterial color="#31383b" roughness={0.9} />
         </mesh>
-        {[-2.3, 2.3].map((x) => (
-          <mesh key={x} position={[x, 0.72, 0]}>
-            <cylinderGeometry args={[0.06, 0.07, 1.45, 8]} />
-            <meshStandardMaterial color="#4e5a60" metalness={0.6} />
-          </mesh>
-        ))}
-      </group>
-
-      <GroundArrow position={[-27.6, 0.205, -8.25]} rotationY={Math.PI / 2} scale={0.75} />
-      <GroundArrow position={[-18.8, 0.205, -15.05]} rotationY={-Math.PI / 2} scale={0.75} />
-      <GroundArrow position={[-30.65, 0.205, -5.9]} rotationY={Math.PI} scale={0.72} />
-
-      <StreetLamp position={[-30.4, 0.2, -10.1]} nightFactor={nightFactor} />
-      <StreetLamp position={[-12.8, 0.2, -10.1]} nightFactor={nightFactor} />
+      ))}
+      <GroundArrow position={[-26, 0.04, SUPERMARKET.aisleZ]} rotationY={-Math.PI / 2} scale={0.75} />
+      <GroundArrow position={[SUPERMARKET.entryX, 0.04, -10]} rotationY={Math.PI} scale={0.72} />
+      <GroundArrow position={[SUPERMARKET.exitX, 0.04, -10]} scale={0.72} />
+      <StreetLamp position={[-37, 0.04, -20]} nightFactor={nightFactor} />
+      <StreetLamp position={[-10, 0.04, -20]} nightFactor={nightFactor} />
       <TrashBin position={[-12.9, 0.2, -7.6]} />
     </group>
   )
 }
 
-function RoundaboutDistrict({
+export function RoundaboutDistrict({
   rain,
   nightFactor,
 }: {
@@ -337,14 +301,13 @@ function RoundaboutDistrict({
 }) {
   const [centerX, centerZ] = ROUNDABOUT.center
   const islandRadius = ROUNDABOUT.islandRadius
-  const laneRadius = ROUNDABOUT.laneRadius
   const outerRadius = ROUNDABOUT.roadOuterRadius
 
   return (
     <group>
       {/* The circle is now a real road node fed by RoadNetwork approaches. */}
       <mesh position={[centerX, 0.055, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[islandRadius + 0.35, outerRadius, 64]} />
+        <ringGeometry args={[islandRadius + 0.14, outerRadius, 64]} />
         <meshStandardMaterial
           color="#242b2e"
           roughness={Math.max(0.28, 0.88 - rain * 0.48)}
@@ -365,42 +328,7 @@ function RoundaboutDistrict({
       <Tree position={[centerX - 1.7, 0.42, centerZ + 0.75]} scale={0.50} />
       <Tree position={[centerX + 1.7, 0.42, centerZ - 0.75]} scale={0.50} />
 
-      {/* Circular lane markers. */}
-      {Array.from({ length: 20 }).map((_, index) => {
-        const angle = (index / 20) * Math.PI * 2
-        return (
-          <mesh
-            key={index}
-            position={[
-              centerX + Math.cos(angle) * laneRadius,
-              0.09,
-              centerZ + Math.sin(angle) * laneRadius,
-            ]}
-            rotation={[-Math.PI / 2, 0, -angle]}
-          >
-            <planeGeometry args={[1.0, 0.08]} />
-            <meshBasicMaterial color="#eeeeea" toneMapped={false} />
-          </mesh>
-        )
-      })}
-
-      <YieldMark
-        position={[ROUNDABOUT.entryWest[0] - 0.75, 0.205, ROUNDABOUT.entryWest[1]]}
-        rotationY={Math.PI / 2}
-      />
-      <YieldMark
-        position={[ROUNDABOUT.entryNorth[0], 0.205, ROUNDABOUT.entryNorth[1] + 0.75]}
-        rotationY={0}
-      />
-      <YieldMark
-        position={[ROUNDABOUT.entryEast[0] + 0.75, 0.205, ROUNDABOUT.entryEast[1]]}
-        rotationY={-Math.PI / 2}
-      />
-      <YieldMark
-        position={[ROUNDABOUT.entrySouth[0], 0.205, ROUNDABOUT.entrySouth[1] - 0.75]}
-        rotationY={Math.PI}
-      />
-
+      {/* A single circulating lane has no dashed divider through its centre. */}
       <StreetLamp
         position={[centerX - outerRadius - 1.7, 0.2, centerZ - outerRadius + 0.8]}
         nightFactor={nightFactor}
@@ -463,21 +391,21 @@ function CommercialStrip({ nightFactor }: { nightFactor: number }) {
   ]
 
   return (
-    <group position={[0, 0, 17.2]}>
+    <group position={[0, 0, DISTRICTS.commercialZ]}>
       {shops.map((shop) => (
         <ShopBuilding key={shop.label} {...shop} nightFactor={nightFactor} />
       ))}
-      <Bench position={[14.5, 0.2, 13.9]} rotationY={Math.PI} />
-      <Bench position={[23.5, 0.2, 13.9]} rotationY={Math.PI} />
-      <TrashBin position={[28.9, 0.2, 14.0]} />
-      <BusStop position={[5.5, 0.2, 10.0]} rotationY={Math.PI} nightFactor={nightFactor} />
+      <Bench position={[14.5, 0.2, -3.3]} rotationY={Math.PI} />
+      <Bench position={[23.5, 0.2, -3.3]} rotationY={Math.PI} />
+      <TrashBin position={[28.9, 0.2, -3.2]} />
+      <BusStop position={[5.5, 0.2, -7.2]} rotationY={Math.PI} nightFactor={nightFactor} />
     </group>
   )
 }
 
 function GasStation({ nightFactor }: { nightFactor: number }) {
   return (
-    <group position={[33.0, 0.18, 8.8]}>
+    <group position={[33.0, 0.028, 8.8]}>
       <mesh position={[0, 3.2, 0]}>
         <boxGeometry args={[10.5, 0.45, 7.0]} />
         <meshStandardMaterial
@@ -513,27 +441,6 @@ function GasStation({ nightFactor }: { nightFactor: number }) {
   )
 }
 
-const CITY_FRAME_BUILDINGS: Array<{
-  variant: BuildingVariant
-  position: [number, number, number]
-  rotationY?: number
-  scale?: number
-}> = [
-  { variant: 'medium', position: [-31.0, 0.18, 17.5], rotationY: Math.PI, scale: 0.82 },
-  { variant: 'small', position: [-22.5, 0.18, 17.4], rotationY: Math.PI, scale: 0.84 },
-  { variant: 'medium', position: [-13.8, 0.18, 17.2], rotationY: Math.PI, scale: 0.80 },
-  { variant: 'medium', position: [-31.0, 0.18, -35.8], rotationY: Math.PI, scale: 0.84 },
-  { variant: 'large', position: [-19.5, 0.18, -36.2], rotationY: Math.PI, scale: 0.88 },
-  { variant: 'small', position: [-8.8, 0.18, -35.6], rotationY: Math.PI, scale: 0.86 },
-  { variant: 'small', position: [10.0, 0.18, -35.8], rotationY: Math.PI, scale: 0.86 },
-  { variant: 'medium', position: [20.0, 0.18, -36.0], rotationY: Math.PI, scale: 0.84 },
-  { variant: 'large', position: [27.0, 0.18, -45.0], rotationY: Math.PI, scale: 0.82 },
-  { variant: 'small', position: [-42.0, 0.18, -14.0], rotationY: Math.PI / 2, scale: 0.82 },
-  { variant: 'medium', position: [-42.0, 0.18, 6.0], rotationY: Math.PI / 2, scale: 0.82 },
-  { variant: 'small', position: [42.0, 0.18, -4.0], rotationY: -Math.PI / 2, scale: 0.84 },
-  { variant: 'medium', position: [42.0, 0.18, 14.0], rotationY: -Math.PI / 2, scale: 0.82 },
-]
-
 export function CityDistricts({
   quality,
   rain,
@@ -550,16 +457,22 @@ export function CityDistricts({
 
   return (
     <>
-      <CityBlockPad position={[-21.5, 0, -15.0]} size={[25.0, 16.0]} tone="#6a7070" />
-      <CityBlockPad position={[21.0, 0, -15.0]} size={[25.0, 16.0]} tone="#666c6c" />
-      <CityBlockPad position={[-21.5, 0, 15.0]} size={[25.0, 16.0]} tone="#626868" />
       <CityBlockPad position={[21.0, 0, 15.0]} size={[25.0, 16.0]} tone="#656b6b" />
 
       <SupermarketBuilding nightFactor={nightFactor} />
       <SupermarketParking rain={rain} nightFactor={nightFactor} />
-      <RoundaboutDistrict rain={rain} nightFactor={nightFactor} />
       <CommercialStrip nightFactor={nightFactor} />
-      {quality === 'high' && <GasStation nightFactor={nightFactor} />}
+      {quality === 'high' && <>
+        <mesh position={[33, 0.028, 8.8]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[13, 9.8]} />
+          <meshStandardMaterial color="#464d4f" roughness={0.9} />
+        </mesh>
+        <mesh position={[31, 0.035, 2.4]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[4, 5]} />
+          <meshStandardMaterial color="#464d4f" roughness={0.9} />
+        </mesh>
+        <GasStation nightFactor={nightFactor} />
+      </>}
 
       <Planter position={[7.8, 0.2, 12.0]} />
       <Planter position={[29.8, 0.2, 12.0]} />
