@@ -226,6 +226,36 @@ assert(
   trafficSpeedLimit(pacedRegistry, 'paced-follower', pacedFuture, 7) > pacedLimit,
   'follower can recover speed when the headway opens',
 )
+
+// Main PLC avenue owns the junction with the supermarket access road.
+// A market/parking car must not create an invisible stop before the real signal.
+const avenueCar = actor(pose(-24, 1.75, 0), 500, 5)
+avenueCar.priority = 0
+avenueCar.trafficClass = 'plc'
+const marketCrossCar = actor(pose(-20, -4.5, -Math.PI / 2), 10, 2)
+marketCrossCar.priority = 2
+marketCrossCar.trafficClass = 'parking'
+const marketPriorityRegistry = {
+  current: new Map([
+    ['avenue', avenueCar],
+    ['market-cross', marketCrossCar],
+  ]),
+}
+const avenueFuture = distance => pose(-24 + distance, 1.75, 0)
+assert.equal(
+  trafficSpeedLimit(marketPriorityRegistry, 'avenue', avenueFuture, 6),
+  6,
+  'PLC avenue car is not stopped early by supermarket access traffic',
+)
+assert(
+  trafficSpeedLimit(
+    marketPriorityRegistry,
+    'market-cross',
+    distance => pose(-20, -4.5 + distance, -Math.PI / 2),
+    4,
+  ) < 4,
+  'supermarket access traffic yields to the main avenue',
+)
 assert(boundedTrafficStep(-12, 4.82, 8, 1, -9) < 0.6, 'red light prevents overshooting stop bar')
 assert.equal(boundedTrafficStep(-10, 4.82, 8, 1, -9), 0, 'queue constraint never reverses a car')
 registry.current.set('leader', actor(pose(0, -1.75, Math.PI), 2))
@@ -329,8 +359,10 @@ assert(
 // If two bodies are already marginally overlapping, only the priority vehicle
 // may creep in a direction that reduces the overlap. This prevents permanent
 // gridlock without allowing either car to push through the other.
-const recoveryPriority = actor(pose(0), 1)
-const recoveryBlocked = actor(pose(-4.55), 10)
+const recoveryPriority = actor(pose(0), 1, 0)
+recoveryPriority.priority = 0
+const recoveryBlocked = actor(pose(-4.55), 10, 0)
+recoveryBlocked.priority = 1
 const recoveryRegistry = {
   current: new Map([
     ['recover-priority', recoveryPriority],
@@ -338,24 +370,35 @@ const recoveryRegistry = {
   ]),
 }
 const recoveryFuture = distance => pose(distance)
+let recoveredStep = 0
+for (let i = 0; i < 24; i++) {
+  recoveredStep = Math.max(
+    recoveredStep,
+    safeVehicleStep(recoveryRegistry, 'recover-priority', 0.12, recoveryFuture),
+  )
+}
 assert(
-  safeVehicleStep(recoveryRegistry, 'recover-priority', 0.12, recoveryFuture) > 0,
-  'priority vehicle may creep out of an existing overlap',
+  recoveredStep > 0,
+  'priority vehicle eventually creeps out of persistent turn contact',
 )
 
-const nonPriority = actor(pose(0), 20)
-const priorityBlocker = actor(pose(-4.55), 5)
+const nonPriority = actor(pose(0), 20, 0)
+nonPriority.priority = 2
+const priorityBlocker = actor(pose(-4.55), 5, 0)
+priorityBlocker.priority = 0
 const blockedRecoveryRegistry = {
   current: new Map([
     ['recover-wait', nonPriority],
     ['recover-owner', priorityBlocker],
   ]),
 }
-assert.equal(
-  safeVehicleStep(blockedRecoveryRegistry, 'recover-wait', 0.12, recoveryFuture),
-  0,
-  'lower-priority vehicle remains stopped in an existing overlap',
-)
+for (let i = 0; i < 24; i++) {
+  assert.equal(
+    safeVehicleStep(blockedRecoveryRegistry, 'recover-wait', 0.12, recoveryFuture),
+    0,
+    'lower-priority vehicle remains stopped while priority vehicle clears contact',
+  )
+}
 const { URBAN_LOTS } = require('../src/components/world/urbanLayout.ts')
 assert(URBAN_LOTS.length >= 12, 'city has populated residential blocks')
 for (const lot of URBAN_LOTS) {
