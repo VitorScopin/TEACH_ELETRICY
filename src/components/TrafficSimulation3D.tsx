@@ -246,42 +246,95 @@ function TrafficLight3D({
   )
 }
 
-function Building({
+type BuildingVariant = 'small' | 'medium' | 'large'
+
+const BUILDING_MODELS: Record<BuildingVariant, string> = {
+  small: 'https://raw.githubusercontent.com/anshaneja5/skyline-run/main/public/assets/models/b_small.glb',
+  medium: 'https://raw.githubusercontent.com/anshaneja5/skyline-run/main/public/assets/models/b_medium.glb',
+  large: 'https://raw.githubusercontent.com/anshaneja5/skyline-run/main/public/assets/models/b_large.glb',
+}
+
+for (const url of Object.values(BUILDING_MODELS)) useGLTF.preload(url)
+
+function GlbBuilding({
+  variant,
   position,
-  size,
-  index,
+  rotationY = 0,
+  scale = 1,
 }: {
+  variant: BuildingVariant
   position: [number, number, number]
-  size: [number, number, number]
-  index: number
+  rotationY?: number
+  scale?: number
 }) {
+  const { scene } = useGLTF(BUILDING_MODELS[variant])
+
+  const model = useMemo(() => {
+    const clone = scene.clone(true)
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = false
+        child.receiveShadow = false
+      }
+      child.updateMatrix()
+      if (child !== clone) child.matrixAutoUpdate = false
+    })
+
+    const bounds = new THREE.Box3().setFromObject(clone)
+    const size = bounds.getSize(new THREE.Vector3())
+    const center = bounds.getCenter(new THREE.Vector3())
+    const targetWidth = variant === 'small' ? 7 : variant === 'medium' ? 9 : 12
+    const normalizeScale = targetWidth / Math.max(size.x, size.z, 0.001)
+
+    return {
+      clone,
+      normalizeScale,
+      offset: new THREE.Vector3(-center.x, -bounds.min.y, -center.z),
+    }
+  }, [scene, variant])
+
   return (
-    <mesh position={position}>
-      <boxGeometry args={size} />
-      <meshStandardMaterial color={index % 2 ? '#102936' : '#0d2330'} roughness={0.82} />
-    </mesh>
+    <group position={position} rotation={[0, rotationY, 0]} scale={scale * model.normalizeScale}>
+      <primitive object={model.clone} position={model.offset} />
+    </group>
   )
 }
 
-function CityBlocks() {
-  const blocks = useMemo(
-    () => [
-      { position: [-18, 3.4, -16] as [number, number, number], size: [6.2, 6.8, 5.4] as [number, number, number] },
-      { position: [-11, 4.6, -16.5] as [number, number, number], size: [4.2, 9.2, 4.8] as [number, number, number] },
-      { position: [11.5, 4.1, -16.5] as [number, number, number], size: [5.2, 8.2, 4.8] as [number, number, number] },
-      { position: [18, 3.2, -15.5] as [number, number, number], size: [5.8, 6.4, 5.4] as [number, number, number] },
-      { position: [-18, 3.0, 16] as [number, number, number], size: [5.5, 6, 5.2] as [number, number, number] },
-      { position: [17, 4.0, 16] as [number, number, number], size: [6.4, 8, 5.2] as [number, number, number] },
-    ],
-    [],
-  )
+const CITY_BUILDINGS: Array<{
+  variant: BuildingVariant
+  position: [number, number, number]
+  rotationY?: number
+  scale?: number
+}> = [
+  { variant: 'large', position: [-31, 0.18, -25], rotationY: 0.12, scale: 1.0 },
+  { variant: 'medium', position: [-20, 0.18, -27], rotationY: -0.18, scale: 0.92 },
+  { variant: 'small', position: [-10, 0.18, -26], rotationY: 0.08, scale: 0.95 },
+  { variant: 'medium', position: [11, 0.18, -27], rotationY: -0.08, scale: 0.95 },
+  { variant: 'large', position: [23, 0.18, -26], rotationY: 0.14, scale: 1.02 },
+  { variant: 'small', position: [34, 0.18, -24], rotationY: -0.16, scale: 0.92 },
+
+  { variant: 'medium', position: [-34, 0.18, 25], rotationY: Math.PI + 0.08, scale: 0.96 },
+  { variant: 'large', position: [-22, 0.18, 27], rotationY: Math.PI - 0.1, scale: 1.04 },
+  { variant: 'small', position: [-10, 0.18, 26], rotationY: Math.PI + 0.14, scale: 0.92 },
+  { variant: 'small', position: [10, 0.18, 26], rotationY: Math.PI - 0.12, scale: 0.96 },
+  { variant: 'medium', position: [21, 0.18, 27], rotationY: Math.PI + 0.08, scale: 0.98 },
+  { variant: 'large', position: [34, 0.18, 25], rotationY: Math.PI - 0.12, scale: 1.0 },
+
+  { variant: 'small', position: [-43, 0.18, -11], rotationY: Math.PI / 2, scale: 0.9 },
+  { variant: 'medium', position: [-44, 0.18, 5], rotationY: Math.PI / 2 + 0.1, scale: 0.96 },
+  { variant: 'small', position: [43, 0.18, -9], rotationY: -Math.PI / 2, scale: 0.94 },
+  { variant: 'medium', position: [44, 0.18, 8], rotationY: -Math.PI / 2 - 0.1, scale: 0.96 },
+]
+
+function CityBlocks({ quality }: { quality: 'medium' | 'high' }) {
+  const buildings = quality === 'high' ? CITY_BUILDINGS : CITY_BUILDINGS.slice(0, 8)
 
   return (
-    <>
-      {blocks.map((block, index) => (
-        <Building key={index} {...block} index={index} />
+    <Suspense fallback={null}>
+      {buildings.map((building, index) => (
+        <GlbBuilding key={index} {...building} />
       ))}
-    </>
+    </Suspense>
   )
 }
 
@@ -515,23 +568,48 @@ function StreetLamp({ position }: { position: [number, number, number] }) {
   )
 }
 
-function UrbanProps() {
+function UrbanProps({ dense = false }: { dense?: boolean }) {
+  const trees: Array<[number, number, number]> = [
+    [-14, 0.18, -10.8], [14.5, 0.18, -10.5], [-14.5, 0.18, 11.2], [14, 0.18, 11],
+    [-28, 0.18, -17], [-20, 0.18, -18], [20, 0.18, -18], [29, 0.18, -17],
+    [-29, 0.18, 17], [-20, 0.18, 18], [20, 0.18, 18], [29, 0.18, 17],
+    [-38, 0.18, -17], [38, 0.18, 17], [-38, 0.18, 17], [38, 0.18, -17],
+  ]
+  const lamps: Array<[number, number, number]> = [
+    [-12.4, 0.18, -8.8], [12.6, 0.18, -8.8], [-12.5, 0.18, 8.9], [12.5, 0.18, 8.9],
+    [-24, 0.18, -8.8], [24, 0.18, -8.8], [-24, 0.18, 8.9], [24, 0.18, 8.9],
+    [-36, 0.18, -8.8], [36, 0.18, -8.8], [-36, 0.18, 8.9], [36, 0.18, 8.9],
+  ]
+
   return (
     <>
-      <Tree position={[-14, 0.18, -10.8]} scale={0.95} />
-      <Tree position={[14.5, 0.18, -10.5]} scale={0.9} />
-      <Tree position={[-14.5, 0.18, 11.2]} scale={0.9} />
-      <Tree position={[14, 0.18, 11]} scale={1.0} />
+      {trees.slice(0, dense ? trees.length : 8).map((position, index) => (
+        <Tree key={`tree-${index}`} position={position} scale={0.78 + (index % 4) * 0.08} />
+      ))}
 
-      <Planter position={[-10.5, 0.18, -10.6]} />
-      <Planter position={[10.8, 0.18, -10.4]} />
-      <Planter position={[-10.7, 0.18, 10.4]} />
-      <Planter position={[10.5, 0.18, 10.5]} />
+      {[-10.5, 10.8].map((x, index) => (
+        <Planter key={`planter-n-${x}`} position={[x, 0.18, -10.6 + index * 0.2]} />
+      ))}
+      {[-10.7, 10.5].map((x, index) => (
+        <Planter key={`planter-s-${x}`} position={[x, 0.18, 10.4 + index * 0.1]} />
+      ))}
 
-      <StreetLamp position={[-12.4, 0.18, -8.8]} />
-      <StreetLamp position={[12.6, 0.18, -8.8]} />
-      <StreetLamp position={[-12.5, 0.18, 8.9]} />
-      <StreetLamp position={[12.5, 0.18, 8.9]} />
+      {lamps.slice(0, dense ? lamps.length : 8).map((position, index) => (
+        <StreetLamp key={`lamp-${index}`} position={position} />
+      ))}
+
+      {dense && (
+        <>
+          <mesh position={[-31, 0.34, 14]}>
+            <boxGeometry args={[8, 0.32, 3.2]} />
+            <meshStandardMaterial color="#253c32" roughness={1} />
+          </mesh>
+          <mesh position={[31, 0.34, -14]}>
+            <boxGeometry args={[8, 0.32, 3.2]} />
+            <meshStandardMaterial color="#253c32" roughness={1} />
+          </mesh>
+        </>
+      )}
     </>
   )
 }
@@ -546,9 +624,23 @@ function RoadScene({ quality }: { quality: 'low' | 'medium' | 'high' }) {
     <>
       {/* World base */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.07, 0]}>
-        <planeGeometry args={[70, TRAFFIC_WORLD.worldDepth]} />
+        <planeGeometry args={[110, 86]} />
         <meshStandardMaterial color="#10191e" roughness={0.99} />
       </mesh>
+
+      {/* Secondary city streets make the district feel larger without affecting PLC traffic logic */}
+      {[-34, 34].map((z) => (
+        <mesh key={`outer-road-z-${z}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.015, z]}>
+          <planeGeometry args={[110, 7.5]} />
+          <meshStandardMaterial color="#1d2428" roughness={0.92} />
+        </mesh>
+      ))}
+      {[-49, 49].map((x) => (
+        <mesh key={`outer-road-x-${x}`} rotation={[-Math.PI / 2, 0, 0]} position={[x, -0.012, 0]}>
+          <planeGeometry args={[7.5, 86]} />
+          <meshStandardMaterial color="#1d2428" roughness={0.92} />
+        </mesh>
+      ))}
 
       {/* Asphalt roads crossing at 90 degrees */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
@@ -652,8 +744,8 @@ function RoadScene({ quality }: { quality: 'low' | 'medium' | 'high' }) {
         <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} />
       </mesh>
 
-      {quality !== 'low' && <UrbanProps />}
-      {quality === 'high' && <CityBlocks />}
+      {quality !== 'low' && <UrbanProps dense={quality === 'high'} />}
+      {quality !== 'low' && <CityBlocks quality={quality} />}
     </>
   )
 }
@@ -996,7 +1088,7 @@ function Scene({
   return (
     <>
       <color attach="background" args={['#07141e']} />
-      <fog attach="fog" args={['#07141e', 34, 70]} />
+      <fog attach="fog" args={['#07141e', 46, 118]} />
 
       <ambientLight intensity={0.76} />
       <hemisphereLight args={['#8ec8e8', '#172025', 0.56]} />
@@ -1023,7 +1115,7 @@ function Scene({
         enableRotate
         enableZoom
         minDistance={12}
-        maxDistance={52}
+        maxDistance={86}
         maxPolarAngle={Math.PI / 2 - 0.08}
         panSpeed={0.9}
         rotateSpeed={0.65}
@@ -1045,7 +1137,7 @@ export function TrafficSimulation3D({
         key={quality}
         frameloop="demand"
         dpr={quality === 'low' ? 0.8 : quality === 'medium' ? 1 : 1.25}
-        camera={{ position: [20, 19, 25], fov: 48 }}
+        camera={{ position: [27, 24, 34], fov: 50 }}
         gl={{
           antialias: quality === 'high',
           alpha: false,
@@ -1060,7 +1152,7 @@ export function TrafficSimulation3D({
 
       <div className="traffic-3d-label">
         <span>TRÁFEGO 3D</span>
-        <strong>4 fluxos ativos • render otimizado • semáforos intertravados</strong>
+        <strong>Distrito urbano • prédios GLB • 4 fluxos ativos • render adaptativo</strong>
       </div>
 
       <div className="traffic-3d-help">
