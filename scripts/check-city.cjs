@@ -11,7 +11,7 @@ require.extensions['.ts'] = (module, filename) => {
 const THREE = require('three')
 const { CITY_ROADS, ROUNDABOUT, BOULEVARD_START, CITY_LIMITS, MAIN_ROADS, CITY_FRAME_BUILDINGS, DISTRICTS, SUPERMARKET, SUPERMARKET_DRIVEWAYS, SUPERMARKET_PARKING_SPOTS } = require('../src/components/world/cityLayout.ts')
 const { TRAFFIC_WORLD, TRAFFIC_GEOMETRY } = require('../src/simulation/trafficWorld.ts')
-const { roadCurve, roadWidthAt, horizontalRoadPose, HORIZONTAL_ROAD_EXIT, roundaboutRoute, parkingApproachCurve, parkingAlignCurve, parkingExitCurve, supermarketPedestrianHeight } = require('../src/components/world/roadGeometry.ts')
+const { roadCurve, roadWidthAt, horizontalRoadPose, HORIZONTAL_ROAD_EXIT, WEST_TRAFFIC_SPAWN, parkRoadRoute, roundaboutRoute, parkingApproachCurve, parkingAlignCurve, parkingExitCurve, supermarketPedestrianHeight } = require('../src/components/world/roadGeometry.ts')
 
 assert(BOULEVARD_START > TRAFFIC_GEOMETRY.eastStopLineX + 4)
 for (const reverse of [false, true]) {
@@ -28,7 +28,7 @@ for (const reverse of [false, true]) {
 
 for (const reverse of [false, true]) {
   let previous
-  for (let distance = BOULEVARD_START; distance < HORIZONTAL_ROAD_EXIT; distance += 0.1) {
+  for (let distance = BOULEVARD_START; distance < (reverse ? -WEST_TRAFFIC_SPAWN : HORIZONTAL_ROAD_EXIT); distance += 0.1) {
     const pose = horizontalRoadPose(reverse ? -distance : distance, 1.75, reverse)
     const point = new THREE.Vector3(...pose.position)
     if (previous) assert(point.distanceTo(previous) < 0.2, 'boulevard speed remains proportional to travelled distance')
@@ -171,3 +171,90 @@ if (process.argv.includes('--map')) {
   const map = { buildings: CITY_FRAME_BUILDINGS, supermarket: SUPERMARKET, spots: SUPERMARKET_PARKING_SPOTS, garden: DISTRICTS.garden, roads: [...Object.values(CITY_ROADS), ...MAIN_ROADS].map(road => ({ ...road, samples: roadCurve(road.points).getSpacedPoints(180).map((p, i) => [p.x, p.z, roadWidthAt(road, i / 180)]) })), roundabout: ROUNDABOUT, limits: CITY_LIMITS }
   fs.writeFileSync(path.join(require('node:os').tmpdir(), 'teach-city-geometry.json'), JSON.stringify(map))
 }
+
+// Full travel routes must keep the complete vehicle on a road, including park junctions.
+const allRoadSamples = [...Object.values(CITY_ROADS), ...MAIN_ROADS].flatMap(road => {
+  const curve = roadCurve(road.points)
+  return Array.from({ length: 1601 }, (_, i) => ({ point: curve.getPointAt(i / 1600), width: roadWidthAt(road, i / 1600) }))
+})
+const networkPaved = point => isPaved(point) || allRoadSamples.some(s => point.distanceTo(s.point) <= s.width / 2 + 0.12)
+for (const reverse of [false, true]) {
+  const park = parkRoadRoute(reverse)
+  const routes = [
+    distance => horizontalRoadPose(reverse ? -distance : distance, 1.75, reverse),
+    distance => { const p = park.getPointAt(distance), t = park.getTangentAt(distance); return { position: [p.x, 0, p.z], rotationY: -Math.atan2(t.z, t.x) } },
+  ]
+  routes.forEach((poseAt, routeIndex) => {
+    for (let i = 0; i <= 1000; i++) {
+      const pose = poseAt(routeIndex ? i / 1000 : BOULEVARD_START + ((reverse ? -WEST_TRAFFIC_SPAWN : HORIZONTAL_ROAD_EXIT) - BOULEVARD_START) * i / 1000)
+      if (Math.abs(pose.position[0]) > CITY_LIMITS.width / 2 - 3 || Math.abs(pose.position[2]) > CITY_LIMITS.depth / 2 - 3) continue
+      for (const forward of [-2.41, 2.41]) for (const side of [-0.95, 0.95]) {
+        const corner = new THREE.Vector3(pose.position[0] + Math.cos(pose.rotationY) * forward + Math.sin(pose.rotationY) * side, 0, pose.position[2] - Math.sin(pose.rotationY) * forward + Math.cos(pose.rotationY) * side)
+        assert(networkPaved(corner), `through route ${routeIndex}/${reverse} body leaves pavement at ${i}: ${corner.x}, ${corner.z}`)
+      }
+    }
+  })
+}
+const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep } = require('../src/components/world/vehicleTraffic.ts')
+const pose = (x, z = 1.75, yaw = 0) => ({ position: [x, 0, z], rotationY: yaw })
+const actor = (p, order) => { const group = new THREE.Group(); group.position.set(...p.position); group.rotation.y = p.rotationY; return { group, length: 4.82, width: 1.9, order } }
+const registry = { current: new Map([['self', actor(pose(0), 1)], ['leader', actor(pose(8), 2)]]) }
+const future = distance => pose(distance)
+assert(trafficSpeedLimit(registry, 'self', future, 8) < 8, 'following vehicle brakes before leader')
+assert(safeVehicleStep(registry, 'self', 5, future) < 3, 'body guard clamps following travel')
+assert(boundedTrafficStep(-12, 4.82, 8, 1, -9) < 0.6, 'red light prevents overshooting stop bar')
+assert.equal(boundedTrafficStep(-10, 4.82, 8, 1, -9), 0, 'queue constraint never reverses a car')
+registry.current.set('leader', actor(pose(0, -1.75, Math.PI), 2))
+assert.equal(trafficSpeedLimit(registry, 'self', future, 8), 8, 'opposite lane stays independent')
+assert.equal(safeVehicleStep(registry, 'self', 5, future), 5, 'opposite lane does not block travel')
+assert(!vehicleBodiesOverlap(pose(0), 4.82, 1.9, pose(0, -1.75, Math.PI), 4.82, 1.9))
+const { URBAN_LOTS } = require('../src/components/world/urbanLayout.ts')
+assert(URBAN_LOTS.length >= 12, 'city has populated residential blocks')
+for (const lot of URBAN_LOTS) {
+  for (const sample of allRoadSamples) {
+    const gap = Math.hypot(Math.max(0, Math.abs(sample.point.x - lot.x) - 4), Math.max(0, Math.abs(sample.point.z - lot.z) - 4.5))
+    assert(gap > sample.width / 2, 'urban lot stays outside asphalt')
+  }
+}
+console.log(`Through routes, park lanes, braking, body collision guards and ${URBAN_LOTS.length} residential lots passed.`)
+
+// Exercise converging traffic for two minutes, including circulating right of way.
+const auditRoutes = [
+  { length: HORIZONTAL_ROAD_EXIT - BOULEVARD_START, at: d => horizontalRoadPose(BOULEVARD_START + d, 1.75), delay: 0 },
+  { length: -WEST_TRAFFIC_SPAWN - BOULEVARD_START, at: d => horizontalRoadPose(WEST_TRAFFIC_SPAWN + d, 1.75, true), delay: 6 },
+  ...[['north', 'east'], ['east', 'south'], ['south', 'north']].map(([entry, exit], i) => {
+    const curve = roundaboutRoute(entry, exit), length = curve.getLength()
+    return { length, delay: i * 7 + 2, at: d => { const t = Math.min(1, d / length), p = curve.getPointAt(t), direction = curve.getTangentAt(t); return pose(p.x, p.z, -Math.atan2(direction.z, direction.x)) } }
+  }),
+].map((route, i) => ({ ...route, id: `audit-${i}`, progress: 0, speed: 0, done: false }))
+const audit = { current: new Map() }
+for (const route of auditRoutes) { const a = actor(route.at(0), 100 + audit.current.size); a.group.visible = false; audit.current.set(route.id, a) }
+for (let frame = 0; frame < 2400; frame++) {
+  for (const route of auditRoutes) {
+    if (route.done || frame * 0.05 < route.delay) continue
+    const a = audit.current.get(route.id), future = d => route.at(route.progress + d)
+    if (!a.group.visible && safeVehicleStep(audit, route.id, 0.001, future) === 0) continue
+    a.group.visible = true
+    const target = trafficSpeedLimit(audit, route.id, future, 4.5)
+    route.speed += THREE.MathUtils.clamp(target - route.speed, -4 * 0.05, 1.8 * 0.05)
+    const step = safeVehicleStep(audit, route.id, Math.min(route.length - route.progress, route.speed * 0.05), future)
+    route.progress += step
+    if (step < route.speed * 0.05) route.speed = step / 0.05
+    const next = route.at(route.progress); a.group.position.set(...next.position); a.group.rotation.y = next.rotationY
+    if (route.progress >= route.length - 0.001) { route.done = true; a.group.visible = false }
+  }
+}
+assert(auditRoutes.every(route => route.done), `converging traffic must clear the circle: ${auditRoutes.filter(r => !r.done).map(r => r.id + ':' + r.progress.toFixed(1)).join(', ')}`)
+console.log('Two-minute converging traffic scenario completed without deadlock.')
+
+registry.current.set('leader', actor(pose(8), 2))
+registry.current.get('leader').group.visible = false
+registry.current.get('leader').group.userData.trafficActive = true
+assert(safeVehicleStep(registry, 'self', 5, future) < 3, 'fading edge traffic still occupies its lane')
+registry.current.get('leader').group.userData.trafficActive = false
+assert.equal(safeVehicleStep(registry, 'self', 5, future), 5, 'inactive delayed actor releases lane')
+
+const { vehicleSpawnClear } = require('../src/components/world/vehicleTraffic.ts')
+registry.current.get('leader').group.userData.trafficActive = true
+assert(!vehicleSpawnClear(registry, pose(8), 4.82, 1.9, 'self'), 'spawn waits for occupied lane')
+assert(vehicleSpawnClear(registry, pose(-12), 4.82, 1.9, 'self'), 'spawn accepts clear entry')
