@@ -20,16 +20,21 @@ export function roadWidthAt(road: CityRoadDefinition, t: number) {
 
 export const BOULEVARD_CURVE = roadCurve(CITY_ROADS.eastBoulevard.points)
 export const BOULEVARD_LENGTH = BOULEVARD_CURVE.getLength()
-export const HORIZONTAL_ROAD_EXIT = BOULEVARD_START + BOULEVARD_LENGTH
 
 export function horizontalRoadPose(progress: number, laneOffset: number, reverse = false) {
   const x = reverse ? -progress : progress
   if (x <= BOULEVARD_START) {
-    return { position: [x, 0.04, reverse ? -laneOffset : laneOffset] as [number, number, number], rotationY: reverse ? Math.PI : 0 }
+    return { position: [x, 0.06, reverse ? -laneOffset : laneOffset] as [number, number, number], rotationY: reverse ? Math.PI : 0 }
   }
-  const t = (x - BOULEVARD_START) / BOULEVARD_LENGTH
-  const { point, tangent } = roadPose(BOULEVARD_CURVE, t, laneOffset, reverse)
-  return { position: [point.x, 0.04, point.z] as [number, number, number], rotationY: -Math.atan2(tangent.z, tangent.x) }
+  const curve = reverse ? WEST_TRAFFIC_CURVE : EAST_TRAFFIC_CURVE
+  const length = reverse ? WEST_TRAFFIC_LENGTH : EAST_TRAFFIC_LENGTH
+  const distance = x - BOULEVARD_START
+  const t = THREE.MathUtils.clamp(reverse ? 1 - distance / length : distance / length, 0, 1)
+  const point = curve.getPointAt(t)
+  const tangent = curve.getTangentAt(t)
+  const yaw = -Math.atan2(tangent.z, tangent.x)
+  // West curve is stored in travel direction; only progress is reversed.
+  return { position: [point.x, 0.06, point.z] as [number, number, number], rotationY: reverse && yaw < 0 ? yaw + Math.PI * 2 : yaw }
 }
 
 export type RoundaboutLeg = 'west' | 'north' | 'east' | 'south'
@@ -138,4 +143,44 @@ export function supermarketPedestrianHeight(z: number) {
   const { rampStartZ, rampEndZ } = SUPERMARKET.crossing
   const t = THREE.MathUtils.clamp((z - rampStartZ) / (rampEndZ - rampStartZ), 0, 1)
   return THREE.MathUtils.lerp(0.055, SUPERMARKET.frontWalk.center[1] + SUPERMARKET.frontWalk.size[1] / 2 + 0.005, t)
+}
+
+function boulevardLanePoint(t: number, reverse = false) {
+  const point = roadPose(BOULEVARD_CURVE, t, 1.75, reverse).point
+  if (point.x < BOULEVARD_START + 2) point.z = reverse ? -1.75 : 1.75
+  if (t === 0) point.x = BOULEVARD_START
+  return point
+}
+
+// Full through routes: PLC -> boulevard -> circle -> east continuation, and back.
+// Reference progress remains linear at the PLC stop bars in both directions.
+const EAST_TRAFFIC_CURVE = new THREE.CatmullRomCurve3([
+  ...Array.from({ length: 41 }, (_, i) => boulevardLanePoint(i / 160)),
+  ...roundaboutRoute('west', 'east').getPoints(640).slice(1),
+], false, 'centripetal')
+const WEST_TRAFFIC_CURVE = new THREE.CatmullRomCurve3([
+  ...roundaboutRoute('east', 'west').getPoints(640),
+  ...Array.from({ length: 40 }, (_, i) => boulevardLanePoint(0.25 * (1 - (i + 1) / 40), true)),
+], false, 'centripetal')
+export const EAST_TRAFFIC_LENGTH = EAST_TRAFFIC_CURVE.getLength()
+export const WEST_TRAFFIC_LENGTH = WEST_TRAFFIC_CURVE.getLength()
+export const HORIZONTAL_ROAD_EXIT = BOULEVARD_START + EAST_TRAFFIC_LENGTH
+export const WEST_TRAFFIC_SPAWN = -(BOULEVARD_START + WEST_TRAFFIC_LENGTH)
+
+export function parkRoadRoute(reverse = false) {
+  const curve = roadCurve(CITY_ROADS.westParkRoad.points)
+  const rootX = CITY_ROADS.westParkRoad.points[0][0]
+  const points: THREE.Vector3[] = []
+  if (!reverse) {
+    const join = roadPose(curve, 0.12, 1.75)
+    const turn = new THREE.CubicBezierCurve3(new THREE.Vector3(-72, 0, 1.75), new THREE.Vector3(rootX - 6, 0, 1.75), join.point.clone().addScaledVector(join.tangent, -3), join.point)
+    points.push(...turn.getPoints(40))
+    for (let i = 1; i <= 100; i++) points.push(roadPose(curve, THREE.MathUtils.lerp(0.12, 1, i / 100), 1.75).point)
+  } else {
+    for (let i = 0; i <= 100; i++) points.push(roadPose(curve, THREE.MathUtils.lerp(1, 0.12, i / 100), 1.75, true).point)
+    const end = roadPose(curve, 0.12, 1.75, true)
+    const turn = new THREE.CubicBezierCurve3(end.point, end.point.clone().addScaledVector(end.tangent, 3), new THREE.Vector3(rootX - 3, 0, -1.75), new THREE.Vector3(rootX - 7, 0, -1.75))
+    points.push(...turn.getPoints(30).slice(1), new THREE.Vector3(-72, 0, -1.75))
+  }
+  return new THREE.CatmullRomCurve3(points, false, 'centripetal')
 }

@@ -1,3 +1,5 @@
+import { UrbanNeighborhoods } from './world/UrbanNeighborhoods'
+import { updateVehicleVisuals } from './world/vehicleVisuals'
 import { OrbitControls, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
@@ -11,8 +13,9 @@ import type { IntersectionTrafficState, SignalId, TrafficState } from '../types'
 import { CityDistricts, RoundaboutDistrict } from './world/CityDistricts'
 import { SupermarketDistrict } from './world/SupermarketDistrict'
 import { CityLife } from './world/CityLife'
-import { BOULEVARD_START, CITY_LIMITS } from './world/cityLayout'
-import { horizontalRoadPose, HORIZONTAL_ROAD_EXIT } from './world/roadGeometry'
+import { BOULEVARD_START, CITY_LIMITS, CITY_BORDER } from './world/cityLayout'
+import { horizontalRoadPose, HORIZONTAL_ROAD_EXIT, WEST_TRAFFIC_SPAWN } from './world/roadGeometry'
+import { trafficSpeedLimit, safeVehicleStep, vehicleSpawnClear, boundedTrafficStep, type VehicleRegistry } from './world/vehicleTraffic'
 import { UrbanRoadNetwork } from './world/RoadNetwork'
 import { Planter, StreetLamp, Tree } from './world/StreetFurniture'
 import {
@@ -36,6 +39,7 @@ type CarData = {
   desiredSpeed: number
   length: number
   braking: boolean
+  clearedStopLine: boolean
 }
 
 type WorldEnvironment = {
@@ -136,7 +140,7 @@ function RoadMark({
     <group position={position} rotation={[0, rotationY, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={size} />
-        <meshBasicMaterial color={color} toneMapped={false} />
+        <meshBasicMaterial color={color} toneMapped={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
       </mesh>
     </group>
   )
@@ -264,34 +268,32 @@ function RoadScene({
   nightFactor: number
 }) {
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
-  const lane = TRAFFIC_WORLD.laneWidth
-  const dashX = [-29, -25, -21, -17, -13, 13, 17, 21, 25, 29]
-  const dashZ = [-20, -16, -12, 12, 16, 20]
 
   return (
     <>
       {/* World base */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
-        <planeGeometry args={[CITY_LIMITS.width, CITY_LIMITS.depth]} />
-        <meshStandardMaterial color="#10191e" roughness={0.99} />
+        <planeGeometry args={[CITY_LIMITS.width + CITY_BORDER * 2, CITY_LIMITS.depth + CITY_BORDER * 2]} />
+        <meshStandardMaterial color="#68755d" roughness={0.99} />
       </mesh>
 
       {/* Asphalt roads crossing at 90 degrees */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - CITY_LIMITS.width / 2) / 2, 0.03, 0]}>
-        <planeGeometry args={[CITY_LIMITS.width / 2 + BOULEVARD_START, TRAFFIC_WORLD.roadWidth]} />
-        <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - (CITY_LIMITS.width / 2 + CITY_BORDER)) / 2, 0.03, 0]}>
+        <planeGeometry args={[CITY_LIMITS.width / 2 + CITY_BORDER + BOULEVARD_START, TRAFFIC_WORLD.roadWidth]} />
+        <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.032, 0]}>
-        <planeGeometry args={[TRAFFIC_WORLD.roadWidth, CITY_LIMITS.depth]} />
-        <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
+        <planeGeometry args={[TRAFFIC_WORLD.roadWidth, CITY_LIMITS.depth + CITY_BORDER * 2]} />
+        <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3} />
       </mesh>
 
       {rain > 0.02 && (
         <>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - CITY_LIMITS.width / 2) / 2, 0.034, 0]}>
-            <planeGeometry args={[CITY_LIMITS.width / 2 + BOULEVARD_START, TRAFFIC_WORLD.roadWidth]} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(BOULEVARD_START - (CITY_LIMITS.width / 2 + CITY_BORDER)) / 2, 0.034, 0]}>
+            <planeGeometry args={[CITY_LIMITS.width / 2 + CITY_BORDER + BOULEVARD_START, TRAFFIC_WORLD.roadWidth]} />
             <meshStandardMaterial
               color="#172027"
+              polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-4}
               transparent
               opacity={Math.min(0.42, rain * 0.38)}
               roughness={Math.max(0.18, 0.55 - rain * 0.35)}
@@ -299,9 +301,10 @@ function RoadScene({
             />
           </mesh>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.035, 0]}>
-            <planeGeometry args={[TRAFFIC_WORLD.roadWidth, CITY_LIMITS.depth]} />
+            <planeGeometry args={[TRAFFIC_WORLD.roadWidth, CITY_LIMITS.depth + CITY_BORDER * 2]} />
             <meshStandardMaterial
               color="#172027"
+              polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-4}
               transparent
               opacity={Math.min(0.42, rain * 0.38)}
               roughness={Math.max(0.18, 0.55 - rain * 0.35)}
@@ -310,51 +313,6 @@ function RoadScene({
           </mesh>
         </>
       )}
-
-      {/* Double yellow center lines, interrupted before the crosswalk/intersection zone */}
-      {[-0.13, 0.13].map((z) => (
-        <group key={`hy-${z}`}>
-          <RoadMark position={[-21.5, 0.036, z]} size={[21, 0.09]} color="#e4bf3d" />
-          <RoadMark position={[(11 + BOULEVARD_START) / 2, 0.036, z]} size={[BOULEVARD_START - 11, 0.09]} color="#e4bf3d" />
-        </group>
-      ))}
-      {[-0.13, 0.13].map((x) => (
-        <group key={`vy-${x}`}>
-          <RoadMark position={[x, 0.037, -16.5]} size={[19, 0.09]} color="#e4bf3d" rotationY={Math.PI / 2} />
-          <RoadMark position={[x, 0.037, 16.5]} size={[19, 0.09]} color="#e4bf3d" rotationY={Math.PI / 2} />
-        </group>
-      ))}
-
-      {/* Dashed white lane dividers */}
-      {[-lane, lane].map((z) =>
-        dashX.filter((x) => x < BOULEVARD_START - 1).map((x) => (
-          <RoadMark key={`hd-${z}-${x}`} position={[x, 0.038, z]} size={[1.9, 0.08]} />
-        )),
-      )}
-      {[-lane, lane].map((x) =>
-        dashZ.map((z) => (
-          <RoadMark
-            key={`vd-${x}-${z}`}
-            position={[x, 0.039, z]}
-            size={[1.9, 0.08]}
-            rotationY={Math.PI / 2}
-          />
-        )),
-      )}
-
-      {/* Solid road edge lines, interrupted at the intersection entrances */}
-      {[halfRoad - 0.14, -halfRoad + 0.14].map((z) => (
-        <group key={`edge-h-${z}`}>
-          <RoadMark position={[-21, 0.037, z]} size={[22, 0.1]} />
-          <RoadMark position={[(10 + BOULEVARD_START) / 2, 0.037, z]} size={[BOULEVARD_START - 10, 0.1]} />
-        </group>
-      ))}
-      {[halfRoad - 0.14, -halfRoad + 0.14].map((x) => (
-        <group key={`edge-v-${x}`}>
-          <RoadMark position={[x, 0.038, -16.5]} size={[13, 0.1]} rotationY={Math.PI / 2} />
-          <RoadMark position={[x, 0.038, 16.5]} size={[13, 0.1]} rotationY={Math.PI / 2} />
-        </group>
-      ))}
 
       {/* Stop bars on the approach side of each crosswalk */}
       <RoadMark
@@ -389,7 +347,7 @@ function RoadScene({
       {/* Clean center asphalt patch over line fragments */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
         <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.roadWidth]} />
-        <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} />
+        <meshStandardMaterial color="#242a2d" roughness={0.88} metalness={0.02} polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3} />
       </mesh>
 
       <SupermarketDistrict quality={quality} rain={rain} nightFactor={nightFactor} />
@@ -415,13 +373,13 @@ type FlowDefinition = {
   toWorld: (progress: number) => [number, number, number]
 }
 
-const VERTICAL_SPAWN = -(TRAFFIC_WORLD.worldDepth / 2 - 1)
-const VERTICAL_EXIT = TRAFFIC_WORLD.worldDepth / 2 - 1
+const VERTICAL_SPAWN = -(CITY_LIMITS.depth / 2 + 4)
+const VERTICAL_EXIT = CITY_LIMITS.depth / 2 + 4
 
 const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
   eastbound: {
     id: 'eastbound',
-    spawn: TRAFFIC_WORLD.spawnX,
+    spawn: -(CITY_LIMITS.width / 2 + 4),
     exit: HORIZONTAL_ROAD_EXIT,
     stopProgress: TRAFFIC_GEOMETRY.westStopLineX,
     rotationY: 0,
@@ -430,8 +388,8 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
   },
   westbound: {
     id: 'westbound',
-    spawn: -HORIZONTAL_ROAD_EXIT,
-    exit: TRAFFIC_WORLD.exitX,
+    spawn: WEST_TRAFFIC_SPAWN,
+    exit: CITY_LIMITS.width / 2 + 4,
     stopProgress: -TRAFFIC_GEOMETRY.eastStopLineX,
     rotationY: Math.PI,
     signalId: 'east',
@@ -486,10 +444,12 @@ function TrafficCars({
   signals,
   running,
   maxCarsPerFlow,
+  actors,
 }: {
   signals: IntersectionTrafficState
   running: boolean
   maxCarsPerFlow: number
+  actors: VehicleRegistry
 }) {
   const [cars, setCars] = useState<CarData[]>([])
   const carsRef = useRef<CarData[]>([])
@@ -536,7 +496,10 @@ function TrafficCars({
       const interval = flowId === 'eastbound' || flowId === 'westbound' ? 3.8 : 4.2
       const belowFlowLimit = flowCars.length < maxCarsPerFlow
 
-      if (spawnClocks.current[flowId] >= interval && spawnClear && belowFlowLimit) {
+      const spawnPose = flowId === 'eastbound' || flowId === 'westbound'
+        ? horizontalRoadPose(def.spawn, 1.75, flowId === 'westbound')
+        : { position: def.toWorld(def.spawn), rotationY: def.rotationY }
+      if (spawnClocks.current[flowId] >= interval && spawnClear && belowFlowLimit && vehicleSpawnClear(actors, spawnPose, 4.82, 1.9)) {
         spawnClocks.current[flowId] = 0
         const id = idRef.current++
         const kind = KINDS[id % KINDS.length]
@@ -554,6 +517,7 @@ function TrafficCars({
           desiredSpeed: 5.6 + (id % 4) * 0.42,
           length: model.length,
           braking: false,
+          clearedStopLine: false,
         }
         workingCars = [...workingCars, spawnedCar]
         flowBuckets.current[flowId].push(spawnedCar)
@@ -570,7 +534,8 @@ function TrafficCars({
       flowCars.forEach((car, index) => {
         const ahead = index > 0 ? flowCars[index - 1] : null
         const front = car.progress + car.length / 2
-        const hasEnteredIntersection = front > -TRAFFIC_WORLD.intersectionHalf
+        if (front > def.stopProgress + 0.01) car.clearedStopLine = true
+        const hasEnteredIntersection = car.clearedStopLine || front > -TRAFFIC_WORLD.intersectionHalf
         const mustStopForSignal = !signal.green && !hasEnteredIntersection
 
         let targetFront = Number.POSITIVE_INFINITY
@@ -596,6 +561,11 @@ function TrafficCars({
           }
         }
 
+        const actorId = `plc-${car.id}`
+        const poseAtDistance = (distance: number) => flowId === 'eastbound' || flowId === 'westbound'
+          ? horizontalRoadPose(car.progress + distance, 1.75, flowId === 'westbound')
+          : { position: def.toWorld(car.progress + distance), rotationY: def.rotationY }
+        targetSpeed = trafficSpeedLimit(actors, actorId, poseAtDistance, targetSpeed)
         car.braking = targetSpeed < car.speed - 0.12
 
         const accel = targetSpeed > car.speed ? 2.0 : 5.4
@@ -604,38 +574,18 @@ function TrafficCars({
           car.speed +
             THREE.MathUtils.clamp(targetSpeed - car.speed, -accel * delta, accel * delta),
         )
-        car.progress += car.speed * delta
+        const requestedStep = boundedTrafficStep(car.progress, car.length, car.speed, delta, targetFront)
+        const step = safeVehicleStep(actors, actorId, requestedStep, poseAtDistance)
+        if (step < car.speed * delta - 0.00001) {
+          car.braking = true
+          car.speed = delta > 0 ? step / delta : 0
+        }
+        car.progress += step
 
         const group = refs.current.get(car.id)
         if (group) {
           applyWorldPosition(group, flowId, car.progress)
-          const wheelSpin = car.speed * delta / 0.34
-
-          let wheels = group.userData.cachedWheels as THREE.Object3D[] | undefined
-          let brakeLamps = group.userData.cachedBrakeLamps as THREE.Mesh[] | undefined
-
-          if (!wheels || !brakeLamps) {
-            wheels = []
-            brakeLamps = []
-            group.traverse((child) => {
-              if (child.userData.wheelRoot) wheels?.push(child)
-              if (child instanceof THREE.Mesh && child.userData.brakeLamp) {
-                brakeLamps?.push(child)
-              }
-            })
-            group.userData.cachedWheels = wheels
-            group.userData.cachedBrakeLamps = brakeLamps
-          }
-
-          for (const wheel of wheels ?? []) wheel.rotateX(wheelSpin)
-
-          const brakeColor = car.braking ? '#ff2b30' : '#5a1114'
-          for (const lamp of brakeLamps ?? []) {
-            const material = lamp.material
-            if (material instanceof THREE.MeshBasicMaterial) {
-              material.color.set(brakeColor)
-            }
-          }
+          updateVehicleVisuals(group, car.speed, delta, car.braking)
         }
       })
     }
@@ -660,8 +610,14 @@ function TrafficCars({
           <group
             key={car.id}
             ref={(node) => {
-              if (node) refs.current.set(car.id, node)
-              else refs.current.delete(car.id)
+              if (node) {
+                node.userData.trafficActive = true
+                refs.current.set(car.id, node)
+                actors.current.set(`plc-${car.id}`, { group: node, length: car.length, width: 1.9, order: car.id })
+              } else {
+                refs.current.delete(car.id)
+                actors.current.delete(`plc-${car.id}`)
+              }
             }}
             position={def.toWorld(car.progress)}
             rotation={[
@@ -899,6 +855,7 @@ function Scene({
   quality: 'low' | 'medium' | 'high'
   environment: WorldEnvironment
 }) {
+  const actors = useRef<VehicleRegistry['current']>(new Map())
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
   const sidewalkSignalOffset = halfRoad + 0.9
   const palette = environmentPalette(environment.hour, environment.rain)
@@ -972,8 +929,9 @@ function Scene({
       <TrafficLight3D traffic={signals.south} position={southSignal} rotationY={0} />
       <TrafficLight3D traffic={signals.north} position={northSignal} rotationY={Math.PI} />
 
-      <TrafficCars signals={signals} running={running} maxCarsPerFlow={quality === 'low' ? 1 : quality === 'medium' ? 2 : 3} />
-      <CityLife running={running} quality={quality} />
+      <TrafficCars actors={actors} signals={signals} running={running} maxCarsPerFlow={quality === 'low' ? 1 : quality === 'medium' ? 2 : 3} />
+      <UrbanNeighborhoods quality={quality} nightFactor={1 - palette.daylight} />
+      <CityLife running={running} quality={quality} actors={actors} />
 
       <OrbitControls
         makeDefault
@@ -1005,7 +963,7 @@ export function TrafficSimulation3D({
         key={quality}
         frameloop="demand"
         dpr={quality === 'low' ? 0.8 : quality === 'medium' ? 1 : 1.25}
-        camera={{ position: [65, 85, 100], fov: 50 }}
+        camera={{ position: [65, 85, 100], fov: 50, near: 3, far: 400 }}
         gl={{
           antialias: quality === 'high',
           alpha: false,

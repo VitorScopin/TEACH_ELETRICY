@@ -1,3 +1,4 @@
+import { updateVehicleVisuals } from './vehicleVisuals'
 import { useFrame } from '@react-three/fiber'
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -11,8 +12,9 @@ import {
   type ParkingSpotDefinition,
 } from './cityLayout'
 
-import { parkingApproachCurve, parkingAlignCurve, parkingExitCurve, supermarketPedestrianHeight, roundaboutRoute, type RoundaboutLeg } from './roadGeometry'
+import { parkingApproachCurve, parkingAlignCurve, parkingExitCurve, supermarketPedestrianHeight, parkRoadRoute, roundaboutRoute } from './roadGeometry'
 
+import { trafficSpeedLimit, safeVehicleStep, vehicleSpawnClear, type VehicleRegistry } from './vehicleTraffic'
 import { marketVehicleMustYield, marketPedestrianMustWait } from './parkingTraffic'
 
 type Quality = 'low' | 'medium' | 'high'
@@ -93,6 +95,7 @@ function ParkingCarAgent({
   movementOwner,
   vehicleActors,
   pedestrianActors,
+  actors,
 }: {
   id: string
   running: boolean
@@ -104,11 +107,13 @@ function ParkingCarAgent({
   movementOwner: MovementOwner
   vehicleActors: Actors
   pedestrianActors: Actors
+  actors: VehicleRegistry
 }) {
   const ref = useRef<THREE.Group>(null)
   const state = useRef<ParkingCarState>('driving')
   const stateProgress = useRef(0)
   const parkedTimer = useRef(0)
+  const motionSpeed = useRef(0)
   const elapsed = useRef(0)
   const spotRef = useRef<ParkingSpotDefinition | null>(null)
   const approachRef = useRef<THREE.CatmullRomCurve3 | null>(null)
@@ -137,23 +142,29 @@ function ParkingCarAgent({
     state.current = 'driving'
     stateProgress.current = 0
     parkedTimer.current = 0
+    motionSpeed.current = 0
     elapsed.current = 0
     spotRef.current = null
     approachRef.current = null
     alignRef.current = null
     exitRef.current = null
-    if (ref.current) ref.current.visible = false
+    if (ref.current) { ref.current.visible = false; ref.current.userData.trafficActive = false }
   }
 
   useEffect(() => {
-    if (ref.current) vehicleActors.current.set(id, ref.current)
+    if (ref.current) {
+      vehicleActors.current.set(id, ref.current)
+      ref.current.userData.trafficActive = false
+      actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order: 200 })
+    }
     return () => {
       const spot = spotRef.current
       if (spot && occupancy.current.get(spot.id) === id) occupancy.current.delete(spot.id)
       if (movementOwner.current === id) movementOwner.current = null
       vehicleActors.current.delete(id)
+      actors.current.delete(id)
     }
-  }, [id, occupancy, movementOwner, vehicleActors])
+  }, [id, occupancy, movementOwner, vehicleActors, actors])
 
   useFrame((_frame, deltaRaw) => {
     const group = ref.current
@@ -164,31 +175,63 @@ function ParkingCarAgent({
 
     if (elapsed.current < delay) {
       group.visible = false
+      group.userData.trafficActive = false
       return
     }
 
     if (!spotRef.current) {
       if (!reserveSpot()) {
         group.visible = false
+        group.userData.trafficActive = false
         return
       }
     }
 
     if (state.current === 'driving' && movementOwner.current && movementOwner.current !== id) {
       group.visible = false
+      group.userData.trafficActive = false
       return
     }
     group.visible = true
+    group.userData.trafficActive = true
     const spot = spotRef.current
     if (!spot) return
 
     group.userData.parkingMoving = state.current !== 'parked'
+    updateVehicleVisuals(group, 0, delta, false)
     if (state.current !== 'parked' && state.current !== 'driving' &&
-        marketVehicleMustYield(group.position, pedestrianActors.current.values())) return
+        marketVehicleMustYield(group.position, pedestrianActors.current.values())) {
+      motionSpeed.current = 0
+      updateVehicleVisuals(group, 0, delta, true)
+      return
+    }
+    const advance = (curve: THREE.CatmullRomCurve3, speed: number, backing = false) => {
+      const length = curve.getLength()
+      const poseAtDistance = (distance: number) => {
+        const t = THREE.MathUtils.clamp(backing ? 1 - stateProgress.current - distance / length : stateProgress.current + distance / length, 0, 1)
+        const point = curve.getPointAt(t), tangent = curve.getTangentAt(t)
+        return { position: [point.x, 0.06, point.z] as [number, number, number], rotationY: -Math.atan2(tangent.z, tangent.x) }
+      }
+      const remaining = Math.max(0, (1 - stateProgress.current) * length)
+      const target = Math.min(speed, Math.sqrt(4 * remaining))
+      const allowed = trafficSpeedLimit(actors, id, poseAtDistance, target)
+      motionSpeed.current += THREE.MathUtils.clamp(allowed - motionSpeed.current, -3 * delta, 1.5 * delta)
+      const distance = safeVehicleStep(actors, id, Math.min(remaining, motionSpeed.current * delta), poseAtDistance)
+      motionSpeed.current = delta > 0 ? distance / delta : 0
+      stateProgress.current += distance / length
+      if (remaining - distance < 0.001) stateProgress.current = 1
+      applyCurveTransform(group, curve, backing ? 1 - stateProgress.current : stateProgress.current)
+      updateVehicleVisuals(group, (backing ? -1 : 1) * motionSpeed.current, delta, allowed < speed)
+    }
     switch (state.current) {
       case 'driving':
-        movementOwner.current = id
         if (approachRef.current) applyCurveTransform(group, approachRef.current, 0)
+        if (!vehicleSpawnClear(actors, { position: [group.position.x, group.position.y, group.position.z], rotationY: group.rotation.y }, 4.82, 1.9, id)) {
+          group.visible = false
+          group.userData.trafficActive = false
+          return
+        }
+        movementOwner.current = id
         state.current = 'entering-parking'
         stateProgress.current = 0
         break
@@ -196,8 +239,7 @@ function ParkingCarAgent({
       case 'entering-parking': {
         const curve = approachRef.current
         if (!curve) return
-        stateProgress.current += delta * 3 / curve.getLength()
-        applyCurveTransform(group, curve, stateProgress.current)
+        advance(curve, 3)
         if (stateProgress.current >= 1) {
           state.current = 'searching-space'
           stateProgress.current = 0
@@ -206,6 +248,7 @@ function ParkingCarAgent({
       }
 
       case 'searching-space':
+        motionSpeed.current = 0
         stateProgress.current += delta / 0.7
         if (stateProgress.current >= 1) {
           state.current = 'aligning'
@@ -216,8 +259,7 @@ function ParkingCarAgent({
       case 'aligning': {
         const curve = alignRef.current
         if (!curve) return
-        stateProgress.current += delta * 1.25 / curve.getLength()
-        applyCurveTransform(group, curve, stateProgress.current)
+        advance(curve, 1.25)
         if (stateProgress.current >= 0.64) state.current = 'parking'
         break
       }
@@ -225,8 +267,7 @@ function ParkingCarAgent({
       case 'parking': {
         const curve = alignRef.current
         if (!curve) return
-        stateProgress.current += delta * 0.75 / curve.getLength()
-        applyCurveTransform(group, curve, stateProgress.current)
+        advance(curve, 0.75)
         if (stateProgress.current >= 1) {
           group.position.set(spot.position[0], 0.04, spot.position[2])
           group.rotation.y = spot.rotationY
@@ -238,6 +279,7 @@ function ParkingCarAgent({
       }
 
       case 'parked':
+        motionSpeed.current = 0
         parkedTimer.current += delta
         group.position.set(spot.position[0], 0.04, spot.position[2])
         group.rotation.y = spot.rotationY
@@ -251,8 +293,7 @@ function ParkingCarAgent({
       case 'leaving-space': {
         const curve = alignRef.current
         if (!curve) return
-        stateProgress.current += delta / curve.getLength()
-        applyCurveTransform(group, curve, 1 - stateProgress.current)
+        advance(curve, 1, true)
         if (stateProgress.current >= 1) {
           state.current = 'leaving-parking'
           stateProgress.current = 0
@@ -263,8 +304,7 @@ function ParkingCarAgent({
       case 'leaving-parking': {
         const curve = exitRef.current
         if (!curve) return
-        stateProgress.current += delta * 3 / curve.getLength()
-        applyCurveTransform(group, curve, stateProgress.current)
+        advance(curve, 3)
         if (stateProgress.current >= 1) resetAgent()
         break
       }
@@ -280,82 +320,58 @@ function ParkingCarAgent({
   )
 }
 
-function RoundaboutCar({
-  running,
-  delay,
-  entry,
-  exit,
-  variant,
-  color,
-}: {
-  running: boolean
-  delay: number
-  entry: RoundaboutLeg
-  exit: RoundaboutLeg
-  variant: VehicleVariant
-  color: string
+function RouteCar({ id, running, delay, curve, variant, color, actors, order }: {
+  id: string; running: boolean; delay: number; curve: THREE.CatmullRomCurve3; variant: VehicleVariant; color: string; actors: VehicleRegistry; order: number
 }) {
   const ref = useRef<THREE.Group>(null)
-  const elapsed = useRef(0)
-  const progress = useRef(0)
-  const curve = useMemo(() => roundaboutRoute(entry, exit), [entry, exit])
-
+  const elapsed = useRef(0), progress = useRef(0), speed = useRef(0)
+  const length = useMemo(() => curve.getLength(), [curve])
+  const poseAt = (distance: number) => {
+    const t = THREE.MathUtils.clamp((progress.current + distance) / length, 0, 1)
+    const point = curve.getPointAt(t), tangent = curve.getTangentAt(t)
+    return { position: [point.x, 0.06, point.z] as [number, number, number], rotationY: -Math.atan2(tangent.z, tangent.x) }
+  }
+  useEffect(() => {
+    if (ref.current) { ref.current.userData.trafficActive = false; actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order }) }
+    return () => { actors.current.delete(id) }
+  }, [id, actors, order])
   useFrame((_frame, deltaRaw) => {
-    if (!running || !ref.current) return
+    const group = ref.current
+    if (!running || !group) return
     const delta = Math.min(deltaRaw, 0.05)
     elapsed.current += delta
-
-    if (elapsed.current < delay) {
-      ref.current.visible = false
-      return
+    if (elapsed.current < delay) { group.visible = false; group.userData.trafficActive = false; return }
+    if (!group.userData.trafficActive) {
+      const pose = poseAt(0)
+      group.position.set(...pose.position); group.rotation.y = pose.rotationY
+      if (!vehicleSpawnClear(actors, pose, 4.82, 1.9, id)) return
+      group.visible = true
+      group.userData.trafficActive = true
     }
-
-    ref.current.visible = true
-    progress.current += delta * 4.5 / curve.getLength()
-    applyCurveTransform(ref.current, curve, progress.current)
-
-    if (progress.current >= 1) {
-      progress.current = 0
-      elapsed.current = 0
-      ref.current.visible = false
+    const target = trafficSpeedLimit(actors, id, poseAt, 4.5)
+    speed.current += THREE.MathUtils.clamp(target - speed.current, -4 * delta, 1.8 * delta)
+    const distance = safeVehicleStep(actors, id, speed.current * delta, poseAt)
+    if (distance < speed.current * delta) speed.current = delta ? distance / delta : 0
+    progress.current += distance
+    applyCurveTransform(group, curve, progress.current / length)
+    updateVehicleVisuals(group, speed.current, delta, target < speed.current - 0.1)
+    if (progress.current >= length) {
+      progress.current = 0; elapsed.current = 0; speed.current = 0; group.visible = false; group.userData.trafficActive = false
     }
   })
-
-  return (
-    <group ref={ref} visible={false}>
-      <Suspense fallback={null}>
-        <RealisticCarModel variant={variant} color={color} />
-      </Suspense>
-    </group>
-  )
+  return <group ref={ref} visible={false}><Suspense fallback={null}><RealisticCarModel variant={variant} color={color} /></Suspense></group>
 }
 
-function RoundaboutTraffic({
-  running,
-  quality,
-}: {
-  running: boolean
-  quality: Exclude<Quality, 'low'>
-}) {
-  const routes = quality === 'high'
-    ? [
-        { delay: 0, entry: 'west' as const, exit: 'north' as const, variant: 'concept' as VehicleVariant, color: '#f0f2f3' },
-        { delay: 3.8, entry: 'north' as const, exit: 'east' as const, variant: 'sport' as VehicleVariant, color: '#2f5f9a' },
-        { delay: 7.5, entry: 'east' as const, exit: 'south' as const, variant: 'lc80' as VehicleVariant, color: '#8b2f3c' },
-        { delay: 11.0, entry: 'south' as const, exit: 'west' as const, variant: 'ferrari' as VehicleVariant, color: '#d7d4ca' },
-      ]
-    : [
-        { delay: 0, entry: 'west' as const, exit: 'east' as const, variant: 'concept' as VehicleVariant, color: '#f0f2f3' },
-        { delay: 6, entry: 'north' as const, exit: 'west' as const, variant: 'sport' as VehicleVariant, color: '#2f5f9a' },
-      ]
-
-  return (
-    <>
-      {routes.map((route, index) => (
-        <RoundaboutCar key={index} running={running} {...route} />
-      ))}
-    </>
-  )
+function RoundaboutTraffic({ running, quality, actors }: { running: boolean; quality: Exclude<Quality, 'low'>; actors: VehicleRegistry }) {
+  // PLC cars now traverse west/east legs themselves. Ambient cars start at map edges.
+  const routes = useMemo(() => [
+    roundaboutRoute('north', 'east'), roundaboutRoute('east', 'south'), roundaboutRoute('south', 'north'),
+    parkRoadRoute(false), parkRoadRoute(true),
+  ], [])
+  const variants: VehicleVariant[] = ['concept', 'sport', 'lc80', 'sport', 'concept']
+  return <>{routes.map((curve, i) => quality === 'medium' && [1, 2, 4].includes(i) ? null :
+    <RouteCar key={i} id={`city-${i}`} running={running} delay={i * 5.5} curve={curve} variant={variants[i]} color={i % 2 ? '#2f5f9a' : '#d7d4ca'} actors={actors} order={100 + i} />
+  )}</>
 }
 
 function PedestrianFigure({ shirt }: { shirt: string }) {
@@ -489,9 +505,11 @@ function PedestrianSystem({
 export function CityLife({
   running,
   quality,
+  actors,
 }: {
   running: boolean
   quality: Quality
+  actors: VehicleRegistry
 }) {
   const occupancy = useRef<OccupancyTable>(new Map())
   const movementOwner = useRef<string | null>(null)
@@ -512,6 +530,7 @@ export function CityLife({
       <ParkingCarAgent
         id="parking-agent-1"
         running={running}
+        actors={actors}
         occupancy={occupancy}
         movementOwner={movementOwner}
         vehicleActors={vehicleActors}
@@ -525,6 +544,7 @@ export function CityLife({
         <ParkingCarAgent
           id="parking-agent-2"
           running={running}
+          actors={actors}
           occupancy={occupancy}
           movementOwner={movementOwner}
           vehicleActors={vehicleActors}
@@ -535,7 +555,7 @@ export function CityLife({
           dwellSeconds={10}
         />
       )}
-      <RoundaboutTraffic running={running} quality={quality} />
+      <RoundaboutTraffic running={running} quality={quality} actors={actors} />
       <PedestrianSystem running={running} quality={quality} vehicleActors={vehicleActors} pedestrianActors={pedestrianActors} />
     </>
   )

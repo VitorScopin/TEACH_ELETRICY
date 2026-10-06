@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { CITY_ROADS, MAIN_ROADS, DISTRICTS, SUPERMARKET_DRIVEWAYS, type CityRoadDefinition, type Vec2Point } from './cityLayout'
+import { CITY_ROADS, MAIN_ROADS, MAIN_MARKING_SEGMENTS, DISTRICTS, SUPERMARKET_DRIVEWAYS, type CityRoadDefinition, type Vec2Point } from './cityLayout'
 import { roadCurve as curveFrom, roadPose, roadWidthAt } from './roadGeometry'
 import { StreetLamp, Tree } from './StreetFurniture'
 
@@ -77,17 +77,18 @@ function RoadRibbon({
     <group>
       {sidewalkWidth > 0 && (
         <mesh geometry={sidewalkGeometry}>
-          <meshStandardMaterial color="#9ca3a0" roughness={0.96} />
+          <meshStandardMaterial color="#9ca3a0" roughness={0.96} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
         </mesh>
       )}
       {curbWidth > 0 && (
         <mesh geometry={curbGeometry}>
-          <meshStandardMaterial color="#c1c3be" roughness={0.93} />
+          <meshStandardMaterial color="#c1c3be" roughness={0.93} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
         </mesh>
       )}
       {surface && <mesh geometry={roadGeometry}>
         <meshStandardMaterial
           color={color}
+          polygonOffset polygonOffsetFactor={-3} polygonOffsetUnits={-3}
           roughness={Math.max(0.24, 0.9 - rain * 0.54)}
           metalness={Math.min(0.2, rain * 0.18)}
         />
@@ -116,7 +117,7 @@ function MarkingRibbon({
   if (!dashed) {
     return (
       <mesh geometry={geometry}>
-        <meshBasicMaterial color={color} toneMapped={false} />
+        <meshBasicMaterial color={color} toneMapped={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
       </mesh>
     )
   }
@@ -135,7 +136,7 @@ function MarkingRibbon({
         return (
           <mesh key={index} position={[mid.x, y, mid.z]} rotation={[-Math.PI / 2, 0, angle]}>
             <planeGeometry args={[length * 0.72, width]} />
-            <meshBasicMaterial color={color} toneMapped={false} />
+            <meshBasicMaterial color={color} toneMapped={false} polygonOffset polygonOffsetFactor={-4} polygonOffsetUnits={-4} />
           </mesh>
         )
       })}
@@ -150,7 +151,7 @@ function RoadMarkings({ road }: { road: CityRoadDefinition }) {
     return {
       center: trim(offsetPath(road, 0)),
       edges: [-0.485, 0.485].map(f => trim(offsetPath(road, f))),
-      dividers: [-0.25, 0.25].map(f => trim(offsetPath(road, f)).slice(0, 85)),
+      dividers: [-0.25, 0.25].map(f => { const points = trim(offsetPath(road, f)); return (road.endWidth ?? road.width) < road.width ? points.slice(0, 85) : points }),
     }
   }, [road])
   return (
@@ -186,7 +187,7 @@ function LandscapedMedian({
         <group key={index}>
           <Tree position={[x, 0.08, z]} scale={0.40 + (index % 2) * 0.08} />
           <StreetLamp
-            position={[x + 1.15, 0.08, z + (index % 2 ? 0.45 : -0.45)]}
+            position={[x, 0.08, z]}
             nightFactor={nightFactor}
           />
         </group>
@@ -328,9 +329,14 @@ export function UrbanRoadNetwork({
   const northAccess = CITY_ROADS.roundaboutNorth
   const eastAccess = CITY_ROADS.roundaboutEast
   const southAccess = CITY_ROADS.roundaboutSouth
+  const parkCrossing = useMemo(() => {
+    const curve = curveFrom(parkRoad.points)
+    return roadPose(curve, 12 / curve.getLength())
+  }, [parkRoad])
 
   return (
     <>
+      {MAIN_MARKING_SEGMENTS.map(road => <RoadMarkings key={road.id} road={road} />)}
       {MAIN_ROADS.map((road) => <RoadRibbon key={road.id} road={road} surface={false} />)}
       <RoadRibbon road={CITY_ROADS.supermarketAccess} rain={rain} />
       <RoadMarkings road={CITY_ROADS.supermarketAccess} />
@@ -358,8 +364,8 @@ export function UrbanRoadNetwork({
       <RoadRibbon road={southAccess} rain={rain} />
       <RoadMarkings road={southAccess} />
 
-      <YellowBox position={[-42, 0.066, 0]} size={[7.0, 12.0]} />
-      <ZebraCrossingLocal position={[-42, 0, 11]} width={7.4} depth={2.5} />
+      <YellowBox position={[CITY_ROADS.westParkRoad.points[0][0], 0.066, 0]} size={[7.0, 12.0]} />
+      <ZebraCrossingLocal position={[parkCrossing.point.x, 0, parkCrossing.point.z]} rotationY={Math.PI / 2 - Math.atan2(parkCrossing.tangent.z, parkCrossing.tangent.x)} width={parkRoad.width} depth={2.5} />
       <ZebraCrossingLocal position={[48, 0, -43]} width={7.2} depth={2.5} />
     </>
   )

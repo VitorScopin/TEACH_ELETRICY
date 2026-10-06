@@ -21,6 +21,13 @@ export type CityRoadDefinition = {
   markingInset?: number
 }
 
+export const CITY_LIMITS = {
+  width: 136,
+  depth: 112,
+} as const
+
+export const CITY_BORDER = 8
+
 export const SUPERMARKET = {
   // Facade faces +Z, directly toward the parking rows and access street.
   position: [-25, 0.028, -41] as [number, number, number],
@@ -114,11 +121,11 @@ export const CITY_ROADS = {
     sidewalkWidth: 1.8,
     curbWidth: 0.38,
     points: [
-      [-42, 0],
-      [-42, 10],
-      [-47, 17],
+      [-46, 0],
+      [-46, 9],
+      [-49, 17],
       [-57, 19],
-      [-72, 19],
+      [-CITY_LIMITS.width / 2 - CITY_BORDER, 19],
     ],
   },
   roundaboutNorth: {
@@ -130,7 +137,7 @@ export const CITY_ROADS = {
     points: [
       [48.0, -38.5],
       [48.0, -46.0],
-      [48.0, -60.0],
+      [48.0, -CITY_LIMITS.depth / 2 - CITY_BORDER],
     ],
   },
   roundaboutEast: {
@@ -142,7 +149,7 @@ export const CITY_ROADS = {
     points: [
       [55.5, -31.0],
       [62.0, -31.0],
-      [72.0, -31.0],
+      [CITY_LIMITS.width / 2 + CITY_BORDER, -31.0],
     ],
   },
   roundaboutSouth: {
@@ -156,7 +163,7 @@ export const CITY_ROADS = {
       [48.0, -16.0],
       [53.0, -10.0],
       [59.0, -6.0],
-      [72.0, -6.0],
+      [CITY_LIMITS.width / 2 + CITY_BORDER, -6.0],
     ],
   },
 } satisfies Record<string, CityRoadDefinition>
@@ -185,14 +192,9 @@ export const ROUNDABOUT = {
   exitSouth: [48.0, -18.8] as const,
 } as const
 
-export const CITY_LIMITS = {
-  width: 136,
-  depth: 112,
-} as const
-
 export const MAIN_ROADS: CityRoadDefinition[] = [
-  { id: 'plc-horizontal', points: [[-CITY_LIMITS.width / 2, 0], [BOULEVARD_START, 0]], width: TRAFFIC_WORLD.roadWidth, sidewalkWidth: 2.2, curbWidth: 0.42 },
-  { id: 'plc-vertical', points: [[0, -CITY_LIMITS.depth / 2], [0, CITY_LIMITS.depth / 2]], width: TRAFFIC_WORLD.roadWidth, sidewalkWidth: 2.2, curbWidth: 0.42 },
+  { id: 'plc-horizontal', points: [[-CITY_LIMITS.width / 2 - CITY_BORDER, 0], [BOULEVARD_START, 0]], width: TRAFFIC_WORLD.roadWidth, sidewalkWidth: 2.2, curbWidth: 0.42 },
+  { id: 'plc-vertical', points: [[0, -CITY_LIMITS.depth / 2 - CITY_BORDER], [0, CITY_LIMITS.depth / 2 + CITY_BORDER]], width: TRAFFIC_WORLD.roadWidth, sidewalkWidth: 2.2, curbWidth: 0.42 },
 ]
 
 export type WorldWaypoint = {
@@ -229,4 +231,9 @@ export const PEDESTRIAN_PATHS: Vec2Point[][] = [
   [[9, 12], [30, 12], [9, 12]],
   [[-31, 22], [-19, 22], [-31, 22]],
   SUPERMARKET.pedestrianPaths[1],
+]
+
+export const MAIN_MARKING_SEGMENTS: CityRoadDefinition[] = [
+  ...[[-CITY_LIMITS.width / 2 - CITY_BORDER, -51], [-41, -25], [-15, -11], [11, BOULEVARD_START]].map(([from, to], i) => ({ id: `main-horizontal-${i}`, points: [[from, 0], [to, 0]] as Vec2Point[], width: TRAFFIC_WORLD.roadWidth })),
+  ...[[-CITY_LIMITS.depth / 2 - CITY_BORDER, -11], [11, CITY_LIMITS.depth / 2 + CITY_BORDER]].map(([from, to], i) => ({ id: `main-vertical-${i}`, points: [[0, from], [0, to]] as Vec2Point[], width: TRAFFIC_WORLD.roadWidth })),
 ]
