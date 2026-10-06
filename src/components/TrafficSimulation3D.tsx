@@ -322,9 +322,6 @@ const CITY_FRAME_BUILDINGS: CityBuilding[] = [
   { variant: 'small', position: [-22.5, 0.18, 17.4], rotationY: Math.PI, scale: 0.84 },
   { variant: 'medium', position: [-13.8, 0.18, 17.2], rotationY: Math.PI, scale: 0.80 },
 
-  { variant: 'large', position: [12.0, 0.18, 18.2], rotationY: Math.PI, scale: 0.86 },
-  { variant: 'medium', position: [21.0, 0.18, 17.8], rotationY: Math.PI, scale: 0.80 },
-  { variant: 'small', position: [29.0, 0.18, 17.3], rotationY: Math.PI, scale: 0.82 },
 
   { variant: 'medium', position: [-31.0, 0.18, -35.8], rotationY: Math.PI, scale: 0.84 },
   { variant: 'large', position: [-19.5, 0.18, -36.2], rotationY: Math.PI, scale: 0.88 },
@@ -607,11 +604,11 @@ function ShopBuilding({
         <boxGeometry args={[5.8, 3.7, 5.0]} />
         <meshStandardMaterial color={facade} roughness={0.76} />
       </mesh>
-      <mesh position={[0, 1.45, -2.53]}>
+      <mesh position={[0, 1.45, -2.53]} rotation={[0, Math.PI, 0]}>
         <planeGeometry args={[4.6, 2.2]} />
         <meshStandardMaterial color="#a9d9e7" emissive="#4b8898" emissiveIntensity={0.35} roughness={0.2} />
       </mesh>
-      <mesh position={[0, 3.3, -2.58]}>
+      <mesh position={[0, 3.3, -2.58]} rotation={[0, Math.PI, 0]}>
         <planeGeometry args={[4.8, 1.25]} />
         <meshBasicMaterial map={sign ?? undefined} color={sign ? '#ffffff' : accent} toneMapped={false} />
       </mesh>
