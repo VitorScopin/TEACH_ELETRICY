@@ -274,6 +274,37 @@ assert(
   trafficSpeedLimit(simultaneousRegistry, 'north-entry', northFuture, 8) < 8,
   'lower-priority simultaneous entry yields before roundabout',
 )
+
+// If two bodies are already marginally overlapping, only the priority vehicle
+// may creep in a direction that reduces the overlap. This prevents permanent
+// gridlock without allowing either car to push through the other.
+const recoveryPriority = actor(pose(0), 1)
+const recoveryBlocked = actor(pose(-4.55), 10)
+const recoveryRegistry = {
+  current: new Map([
+    ['recover-priority', recoveryPriority],
+    ['recover-blocked', recoveryBlocked],
+  ]),
+}
+const recoveryFuture = distance => pose(distance)
+assert(
+  safeVehicleStep(recoveryRegistry, 'recover-priority', 0.12, recoveryFuture) > 0,
+  'priority vehicle may creep out of an existing overlap',
+)
+
+const nonPriority = actor(pose(0), 20)
+const priorityBlocker = actor(pose(-4.55), 5)
+const blockedRecoveryRegistry = {
+  current: new Map([
+    ['recover-wait', nonPriority],
+    ['recover-owner', priorityBlocker],
+  ]),
+}
+assert.equal(
+  safeVehicleStep(blockedRecoveryRegistry, 'recover-wait', 0.12, recoveryFuture),
+  0,
+  'lower-priority vehicle remains stopped in an existing overlap',
+)
 const { URBAN_LOTS } = require('../src/components/world/urbanLayout.ts')
 assert(URBAN_LOTS.length >= 12, 'city has populated residential blocks')
 for (const lot of URBAN_LOTS) {
