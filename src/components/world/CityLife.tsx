@@ -31,7 +31,6 @@ export type ParkingCarState =
 
 type OccupancyTable = Map<string, string>
 type Actors = React.MutableRefObject<Map<string, THREE.Group>>
-type MovementOwner = React.MutableRefObject<string | null>
 
 const STATIC_CARS = [
   { spotId: 'A02', variant: 'concept' as VehicleVariant, color: '#d9e1e5' },
@@ -92,7 +91,6 @@ function ParkingCarAgent({
   color,
   delay,
   dwellSeconds,
-  movementOwner,
   vehicleActors,
   pedestrianActors,
   actors,
@@ -104,7 +102,6 @@ function ParkingCarAgent({
   color: string
   delay: number
   dwellSeconds: number
-  movementOwner: MovementOwner
   vehicleActors: Actors
   pedestrianActors: Actors
   actors: VehicleRegistry
@@ -138,7 +135,6 @@ function ParkingCarAgent({
     if (spot && occupancy.current.get(spot.id) === id) {
       occupancy.current.delete(spot.id)
     }
-    if (movementOwner.current === id) movementOwner.current = null
     state.current = 'driving'
     stateProgress.current = 0
     parkedTimer.current = 0
@@ -160,11 +156,10 @@ function ParkingCarAgent({
     return () => {
       const spot = spotRef.current
       if (spot && occupancy.current.get(spot.id) === id) occupancy.current.delete(spot.id)
-      if (movementOwner.current === id) movementOwner.current = null
       vehicleActors.current.delete(id)
       actors.current.delete(id)
     }
-  }, [id, occupancy, movementOwner, vehicleActors, actors])
+  }, [id, occupancy, vehicleActors, actors])
 
   useFrame((_frame, deltaRaw) => {
     const group = ref.current
@@ -187,11 +182,6 @@ function ParkingCarAgent({
       }
     }
 
-    if (state.current === 'driving' && movementOwner.current && movementOwner.current !== id) {
-      group.visible = false
-      group.userData.trafficActive = false
-      return
-    }
     group.visible = true
     group.userData.trafficActive = true
     const spot = spotRef.current
@@ -231,7 +221,6 @@ function ParkingCarAgent({
           group.userData.trafficActive = false
           return
         }
-        movementOwner.current = id
         state.current = 'entering-parking'
         stateProgress.current = 0
         break
@@ -273,7 +262,6 @@ function ParkingCarAgent({
           group.rotation.y = spot.rotationY
           state.current = 'parked'
           parkedTimer.current = 0
-          if (movementOwner.current === id) movementOwner.current = null
         }
         break
       }
@@ -283,8 +271,7 @@ function ParkingCarAgent({
         parkedTimer.current += delta
         group.position.set(spot.position[0], 0.04, spot.position[2])
         group.rotation.y = spot.rotationY
-        if (parkedTimer.current >= dwellSeconds && (!movementOwner.current || movementOwner.current === id)) {
-          movementOwner.current = id
+        if (parkedTimer.current >= dwellSeconds) {
           state.current = 'leaving-space'
           stateProgress.current = 0
         }
@@ -512,7 +499,6 @@ export function CityLife({
   actors: VehicleRegistry
 }) {
   const occupancy = useRef<OccupancyTable>(new Map())
-  const movementOwner = useRef<string | null>(null)
   const vehicleActors = useRef<Map<string, THREE.Group>>(new Map())
   const pedestrianActors = useRef<Map<string, THREE.Group>>(new Map())
 
@@ -532,7 +518,6 @@ export function CityLife({
         running={running}
         actors={actors}
         occupancy={occupancy}
-        movementOwner={movementOwner}
         vehicleActors={vehicleActors}
         pedestrianActors={pedestrianActors}
         variant="concept"
@@ -546,7 +531,6 @@ export function CityLife({
           running={running}
           actors={actors}
           occupancy={occupancy}
-          movementOwner={movementOwner}
           vehicleActors={vehicleActors}
           pedestrianActors={pedestrianActors}
           variant="sport"
