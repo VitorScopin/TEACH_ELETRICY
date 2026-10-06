@@ -155,7 +155,8 @@ function ParkingCarAgent({
     if (ref.current) {
       vehicleActors.current.set(id, ref.current)
       ref.current.userData.trafficActive = false
-      actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order: 200 })
+      ref.current.userData.trafficSpeed = 0
+      actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order: 200, priority: 2 })
     }
     return () => {
       const spot = spotRef.current
@@ -218,6 +219,7 @@ function ParkingCarAgent({
       motionSpeed.current += THREE.MathUtils.clamp(allowed - motionSpeed.current, -3 * delta, 1.5 * delta)
       const distance = safeVehicleStep(actors, id, Math.min(remaining, motionSpeed.current * delta), poseAtDistance)
       motionSpeed.current = delta > 0 ? distance / delta : 0
+      group.userData.trafficSpeed = motionSpeed.current
       stateProgress.current += distance / length
       if (remaining - distance < 0.001) stateProgress.current = 1
       applyCurveTransform(group, curve, backing ? 1 - stateProgress.current : stateProgress.current)
@@ -280,11 +282,14 @@ function ParkingCarAgent({
 
       case 'parked':
         motionSpeed.current = 0
+        group.userData.trafficSpeed = 0
+        group.userData.trafficActive = false
         parkedTimer.current += delta
         group.position.set(spot.position[0], 0.04, spot.position[2])
         group.rotation.y = spot.rotationY
         if (parkedTimer.current >= dwellSeconds && (!movementOwner.current || movementOwner.current === id)) {
           movementOwner.current = id
+          group.userData.trafficActive = true
           state.current = 'leaving-space'
           stateProgress.current = 0
         }
@@ -332,7 +337,11 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
     return { position: [point.x, 0.06, point.z] as [number, number, number], rotationY: -Math.atan2(tangent.z, tangent.x) }
   }
   useEffect(() => {
-    if (ref.current) { ref.current.userData.trafficActive = false; actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order }) }
+    if (ref.current) {
+      ref.current.userData.trafficActive = false
+      ref.current.userData.trafficSpeed = 0
+      actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order, priority: 1 })
+    }
     return () => { actors.current.delete(id) }
   }, [id, actors, order])
   useFrame((_frame, deltaRaw) => {
@@ -352,6 +361,7 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
     speed.current += THREE.MathUtils.clamp(target - speed.current, -4 * delta, 1.8 * delta)
     const distance = safeVehicleStep(actors, id, speed.current * delta, poseAt)
     if (distance < speed.current * delta) speed.current = delta ? distance / delta : 0
+    group.userData.trafficSpeed = speed.current
     progress.current += distance
     applyCurveTransform(group, curve, progress.current / length)
     updateVehicleVisuals(group, speed.current, delta, target < speed.current - 0.1)
