@@ -305,6 +305,15 @@ export function RoundaboutDistrict({
 
   return (
     <group>
+      {/* Lower than the approach asphalt, so every access cuts an open mouth. */}
+      <mesh position={[centerX, 0.012, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[outerRadius, outerRadius + 2.1, 64]} />
+        <meshStandardMaterial color="#9ca3a0" roughness={0.96} />
+      </mesh>
+      <mesh position={[centerX, 0.020, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[outerRadius, outerRadius + 0.38, 64]} />
+        <meshStandardMaterial color="#c1c3be" roughness={0.93} />
+      </mesh>
       {/* The circle is now a real road node fed by RoadNetwork approaches. */}
       <mesh position={[centerX, 0.055, centerZ]} rotation={[-Math.PI / 2, 0, 0]}>
         <ringGeometry args={[islandRadius + 0.14, outerRadius, 64]} />
