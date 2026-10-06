@@ -26,11 +26,21 @@ type CarData = {
   braking: boolean
 }
 
+type WorldEnvironment = {
+  hour: number
+  autoTime: boolean
+  timeSpeed: number
+  rain: number
+  wind: number
+  windDirection: number
+}
+
 type TrafficSimulation3DProps = {
   signals: IntersectionTrafficState
   running: boolean
   quality: 'low' | 'medium' | 'high'
   targetFps: number
+  environment: WorldEnvironment
 }
 
 const COLORS = ['#2b6cb0', '#718096', '#dfe7eb', '#8b2f3c', '#263746', '#165a72']
@@ -614,7 +624,13 @@ function UrbanProps({ dense = false }: { dense?: boolean }) {
   )
 }
 
-function RoadScene({ quality }: { quality: 'low' | 'medium' | 'high' }) {
+function RoadScene({
+  quality,
+  rain,
+}: {
+  quality: 'low' | 'medium' | 'high'
+  rain: number
+}) {
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
   const lane = TRAFFIC_WORLD.laneWidth
   const dashX = [-29, -25, -21, -17, -13, 13, 17, 21, 25, 29]
@@ -651,6 +667,31 @@ function RoadScene({ quality }: { quality: 'low' | 'medium' | 'high' }) {
         <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.worldDepth]} />
         <meshStandardMaterial color="#252b2e" roughness={0.86} metalness={0.035} />
       </mesh>
+
+      {rain > 0.02 && (
+        <>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.016, 0]}>
+            <planeGeometry args={[TRAFFIC_WORLD.roadLength, TRAFFIC_WORLD.roadWidth]} />
+            <meshStandardMaterial
+              color="#172027"
+              transparent
+              opacity={Math.min(0.42, rain * 0.38)}
+              roughness={Math.max(0.18, 0.55 - rain * 0.35)}
+              metalness={Math.min(0.32, rain * 0.28)}
+            />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.018, 0]}>
+            <planeGeometry args={[TRAFFIC_WORLD.roadWidth, TRAFFIC_WORLD.worldDepth]} />
+            <meshStandardMaterial
+              color="#172027"
+              transparent
+              opacity={Math.min(0.42, rain * 0.38)}
+              roughness={Math.max(0.18, 0.55 - rain * 0.35)}
+              metalness={Math.min(0.32, rain * 0.28)}
+            />
+          </mesh>
+        </>
+      )}
 
       {/* Four independent sidewalk quadrants */}
       <SidewalkCorner x={-1} z={-1} />
@@ -1015,6 +1056,169 @@ function TrafficCars({
   )
 }
 
+function environmentPalette(hour: number, rain: number) {
+  const normalized = ((hour % 24) + 24) % 24
+  const daylight = THREE.MathUtils.clamp(
+    Math.sin(((normalized - 6) / 12) * Math.PI),
+    0,
+    1,
+  )
+  const dawn = Math.max(0, 1 - Math.abs(normalized - 6) / 1.5)
+  const dusk = Math.max(0, 1 - Math.abs(normalized - 18) / 1.8)
+  const twilight = Math.max(dawn, dusk)
+
+  const night = new THREE.Color('#020712')
+  const day = new THREE.Color('#73b8e8')
+  const sunset = new THREE.Color('#d88255')
+  const sky = night.clone().lerp(day, daylight)
+  sky.lerp(sunset, twilight * 0.34)
+  sky.lerp(new THREE.Color('#26343d'), rain * 0.5)
+
+  const fog = sky.clone().lerp(new THREE.Color('#1c252b'), 0.28 + rain * 0.35)
+
+  return {
+    daylight,
+    twilight,
+    sky,
+    fog,
+    ambient: 0.16 + daylight * 0.66,
+    hemi: 0.14 + daylight * 0.48,
+    sun: 0.08 + daylight * 1.35,
+  }
+}
+
+function RainSystem({
+  intensity,
+  wind,
+  windDirection,
+  quality,
+}: {
+  intensity: number
+  wind: number
+  windDirection: number
+  quality: 'low' | 'medium' | 'high'
+}) {
+  const ref = useRef<THREE.Points>(null)
+  const count = quality === 'low' ? 240 : quality === 'medium' ? 650 : 1200
+  const positions = useMemo(() => {
+    const data = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) {
+      data[i * 3] = (Math.random() - 0.5) * 82
+      data[i * 3 + 1] = Math.random() * 34 + 2
+      data[i * 3 + 2] = (Math.random() - 0.5) * 66
+    }
+    return data
+  }, [count])
+
+  useFrame((_state, deltaRaw) => {
+    if (!ref.current || intensity <= 0.01) return
+    const delta = Math.min(deltaRaw, 0.05)
+    const geometry = ref.current.geometry
+    const attribute = geometry.getAttribute('position') as THREE.BufferAttribute
+    const angle = THREE.MathUtils.degToRad(windDirection)
+    const driftX = Math.cos(angle) * wind * 8
+    const driftZ = Math.sin(angle) * wind * 8
+    const fall = 15 + intensity * 25
+
+    for (let i = 0; i < count; i++) {
+      const index = i * 3
+      positions[index] += driftX * delta
+      positions[index + 1] -= fall * delta
+      positions[index + 2] += driftZ * delta
+
+      if (positions[index + 1] < 0) {
+        positions[index] = (Math.random() - 0.5) * 82
+        positions[index + 1] = 30 + Math.random() * 8
+        positions[index + 2] = (Math.random() - 0.5) * 66
+      }
+      if (positions[index] > 44) positions[index] = -44
+      if (positions[index] < -44) positions[index] = 44
+      if (positions[index + 2] > 36) positions[index + 2] = -36
+      if (positions[index + 2] < -36) positions[index + 2] = 36
+    }
+    attribute.needsUpdate = true
+  })
+
+  if (intensity <= 0.01) return null
+
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        color="#b8d7e8"
+        size={quality === 'high' ? 0.11 : 0.09}
+        transparent
+        opacity={0.25 + intensity * 0.62}
+        depthWrite={false}
+        sizeAttenuation
+      />
+    </points>
+  )
+}
+
+function WindParticles({
+  strength,
+  direction,
+  quality,
+}: {
+  strength: number
+  direction: number
+  quality: 'low' | 'medium' | 'high'
+}) {
+  const ref = useRef<THREE.Points>(null)
+  const count = quality === 'low' ? 24 : quality === 'medium' ? 55 : 90
+  const positions = useMemo(() => {
+    const data = new Float32Array(count * 3)
+    for (let i = 0; i < count; i++) {
+      data[i * 3] = (Math.random() - 0.5) * 88
+      data[i * 3 + 1] = 0.5 + Math.random() * 5
+      data[i * 3 + 2] = (Math.random() - 0.5) * 64
+    }
+    return data
+  }, [count])
+
+  useFrame((_state, deltaRaw) => {
+    if (!ref.current || strength <= 0.05) return
+    const delta = Math.min(deltaRaw, 0.05)
+    const attribute = ref.current.geometry.getAttribute('position') as THREE.BufferAttribute
+    const angle = THREE.MathUtils.degToRad(direction)
+    const vx = Math.cos(angle) * (2 + strength * 10)
+    const vz = Math.sin(angle) * (2 + strength * 10)
+
+    for (let i = 0; i < count; i++) {
+      const index = i * 3
+      positions[index] += vx * delta
+      positions[index + 2] += vz * delta
+      positions[index + 1] += Math.sin((i + performance.now() * 0.001) * 0.8) * 0.001
+
+      if (positions[index] > 46) positions[index] = -46
+      if (positions[index] < -46) positions[index] = 46
+      if (positions[index + 2] > 34) positions[index + 2] = -34
+      if (positions[index + 2] < -34) positions[index + 2] = 34
+    }
+    attribute.needsUpdate = true
+  })
+
+  if (strength <= 0.05) return null
+
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        color="#a8b98a"
+        size={0.12}
+        transparent
+        opacity={0.12 + strength * 0.3}
+        depthWrite={false}
+      />
+    </points>
+  )
+}
+
 function RenderLimiter({ active, targetFps }: { active: boolean; targetFps: number }) {
   const invalidate = useThree((state) => state.invalidate)
 
@@ -1056,13 +1260,22 @@ function Scene({
   signals,
   running,
   quality,
+  environment,
 }: {
   signals: IntersectionTrafficState
   running: boolean
   quality: 'low' | 'medium' | 'high'
+  environment: WorldEnvironment
 }) {
   const halfRoad = TRAFFIC_WORLD.roadWidth / 2
   const sidewalkSignalOffset = halfRoad + 0.9
+  const palette = environmentPalette(environment.hour, environment.rain)
+  const sunAngle = ((environment.hour - 6) / 24) * Math.PI * 2
+  const sunPosition: [number, number, number] = [
+    Math.cos(sunAngle) * 34,
+    Math.max(4, Math.sin(sunAngle) * 42),
+    18,
+  ]
 
   const westSignal: [number, number, number] = [
     TRAFFIC_GEOMETRY.westStopLineX - 0.35,
@@ -1087,18 +1300,35 @@ function Scene({
 
   return (
     <>
-      <color attach="background" args={['#07141e']} />
-      <fog attach="fog" args={['#07141e', 46, 118]} />
+      <color attach="background" args={[palette.sky]} />
+      <fog attach="fog" args={[palette.fog, 40 - environment.rain * 10, 118 - environment.rain * 38]} />
 
-      <ambientLight intensity={0.76} />
-      <hemisphereLight args={['#8ec8e8', '#172025', 0.56]} />
+      <ambientLight intensity={palette.ambient} />
+      <hemisphereLight
+        args={[
+          palette.daylight > 0.2 ? '#9ad7ff' : '#243a63',
+          '#111820',
+          palette.hemi,
+        ]}
+      />
       <directionalLight
-        position={[15, 24, 12]}
-        intensity={1.22}
-        color="#e0f2ff"
+        position={sunPosition}
+        intensity={palette.sun}
+        color={palette.twilight > 0.2 ? '#ffb57b' : palette.daylight > 0.15 ? '#e7f5ff' : '#8aa3d8'}
       />
 
-      <RoadScene quality={quality} />
+      <RoadScene quality={quality} rain={environment.rain} />
+      <RainSystem
+        intensity={environment.rain}
+        wind={environment.wind}
+        windDirection={environment.windDirection}
+        quality={quality}
+      />
+      <WindParticles
+        strength={environment.wind}
+        direction={environment.windDirection}
+        quality={quality}
+      />
 
       {/* Four correctly placed approach signals */}
       <TrafficLight3D traffic={signals.west} position={westSignal} rotationY={Math.PI / 2} />
@@ -1130,6 +1360,7 @@ export function TrafficSimulation3D({
   running,
   quality,
   targetFps,
+  environment,
 }: TrafficSimulation3DProps) {
   return (
     <div className="traffic-3d-root">
@@ -1146,13 +1377,22 @@ export function TrafficSimulation3D({
           depth: true,
         }}
       >
-        <RenderLimiter active={running} targetFps={targetFps} />
-        <Scene signals={signals} running={running} quality={quality} />
+        <RenderLimiter active={running || environment.autoTime || environment.rain > 0.01 || environment.wind > 0.05} targetFps={targetFps} />
+        <Scene
+          signals={signals}
+          running={running}
+          quality={quality}
+          environment={environment}
+        />
       </Canvas>
 
       <div className="traffic-3d-label">
         <span>TRÁFEGO 3D</span>
-        <strong>Distrito urbano • prédios GLB • 4 fluxos ativos • render adaptativo</strong>
+        <strong>
+          {String(Math.floor(environment.hour)).padStart(2, '0')}:{String(Math.floor((environment.hour % 1) * 60)).padStart(2, '0')}
+          {' • '}{environment.rain > .65 ? 'chuva forte' : environment.rain > .15 ? 'chuva' : 'tempo seco'}
+          {' • '}vento {Math.round(environment.wind * 100)}%
+        </strong>
       </div>
 
       <div className="traffic-3d-help">
