@@ -279,6 +279,19 @@ export function shouldStopForSignal({
   return distanceToStopLine > comfortableStoppingDistance
 }
 
+function predictedActorPose(actor: VehicleActor, seconds: number): VehiclePose {
+  const pose = actorPose(actor)
+  const speed = actorSpeed(actor)
+  return {
+    position: [
+      pose.position[0] + Math.cos(pose.rotationY) * speed * seconds,
+      pose.position[1],
+      pose.position[2] - Math.sin(pose.rotationY) * speed * seconds,
+    ],
+    rotationY: pose.rotationY,
+  }
+}
+
 export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtDistance: (distance: number) => VehiclePose, desiredSpeed: number) {
   const self = registry.current.get(id)
   if (!self) return desiredSpeed
@@ -361,6 +374,39 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
       )
     }
 
+    // Predict crossing/turn conflicts before bodies touch. Only the vehicle
+    // without right of way brakes here, avoiding the "both hit and freeze"
+    // case at bends and supermarket junctions.
+    if (
+      !following &&
+      otherHasPriority(self, other) &&
+      !selfRoundabout.committed &&
+      !otherRoundabout.committed &&
+      separation < 20
+    ) {
+      const referenceSpeed = Math.max(1.2, actorSpeed(self), desiredSpeed * 0.65)
+      for (const distance of [2, 3.5, 5, 7, 9]) {
+        const seconds = distance / referenceSpeed
+        if (
+          vehicleBodiesOverlap(
+            poseAtDistance(distance),
+            self.length,
+            self.width,
+            predictedActorPose(other, seconds),
+            other.length,
+            other.width,
+            0.8,
+          )
+        ) {
+          limit = Math.min(
+            limit,
+            Math.sqrt(2 * 3.0 * Math.max(0, distance - 1.9)),
+          )
+          break
+        }
+      }
+    }
+
     const circleGap =
       selfRoundabout.circulating && otherRoundabout.circulating
         ? clockwiseAngleGap(selfRoundabout.angle, otherRoundabout.angle) *
@@ -433,7 +479,7 @@ export function safeVehicleStep(registry: VehicleRegistry, id: string, requested
   const self = registry.current.get(id)
   if (!self || requested <= 0) return requested
 
-  const blockersAt = (distance: number) => {
+  const blockersAt = (distance: number, margin = 0.5) => {
     const pose = poseAtDistance(distance)
     const blockers: Array<{ actor: VehicleActor; depth: number }> = []
 
@@ -446,6 +492,7 @@ export function safeVehicleStep(registry: VehicleRegistry, id: string, requested
         actorPose(other),
         other.length,
         other.width,
+        margin,
       )
       if (depth > 0) blockers.push({ actor: other, depth })
     }
@@ -454,36 +501,52 @@ export function safeVehicleStep(registry: VehicleRegistry, id: string, requested
   }
 
   const requestedBlockers = blockersAt(requested)
-  if (!requestedBlockers.length) return requested
+  if (!requestedBlockers.length) {
+    self.group.userData.trafficBlockedFrames = 0
+    return requested
+  }
 
-  const currentBlockers = blockersAt(0)
-  if (currentBlockers.length) {
-    // Rare conflict recovery: only the deterministic priority vehicle may creep
-    // forward, and only when that tiny motion reduces every existing overlap
-    // without introducing a new one. This resolves gridlocks without letting a
-    // car push deeper through another vehicle.
-    const recoveryStep = Math.min(requested, 0.16)
-    const recoveryBlockers = blockersAt(recoveryStep)
-    const currentActors = new Set(currentBlockers.map(({ actor }) => actor))
+  const currentEnvelopeBlockers = blockersAt(0)
+  const currentPhysicalBlockers = blockersAt(0, 0.05)
 
-    const introducesNewConflict = recoveryBlockers.some(
-      ({ actor }) => !currentActors.has(actor),
-    )
-    const ownsPriority = currentBlockers.every(
-      ({ actor }) => !otherHasPriority(self, actor),
-    )
-    const reducesEveryConflict = currentBlockers.every(({ actor, depth }) => {
-      const next = recoveryBlockers.find((item) => item.actor === actor)
-      return !next || next.depth < depth - 0.002
-    })
+  if (currentEnvelopeBlockers.length) {
+    const blockedFrames =
+      (self.group.userData.trafficBlockedFrames as number | undefined ?? 0) + 1
+    self.group.userData.trafficBlockedFrames = blockedFrames
 
-    if (ownsPriority && !introducesNewConflict && reducesEveryConflict) {
-      return recoveryStep
+    // If the bodies have actually touched, choose exactly one vehicle to clear
+    // the contact. Normally it may move only when penetration decreases.
+    // After a short persistent jam, allow a tiny priority creep as long as it
+    // does not create a new conflict or materially worsen the existing one.
+    if (currentPhysicalBlockers.length) {
+      const ownsPriority = currentPhysicalBlockers.every(
+        ({ actor }) => !otherHasPriority(self, actor),
+      )
+      if (ownsPriority) {
+        const recoveryStep = Math.min(requested, blockedFrames > 18 ? 0.11 : 0.06)
+        const recoveryPhysical = blockersAt(recoveryStep, 0.05)
+        const currentActors = new Set(currentPhysicalBlockers.map(({ actor }) => actor))
+        const introducesNewConflict = recoveryPhysical.some(
+          ({ actor }) => !currentActors.has(actor),
+        )
+        const improves = currentPhysicalBlockers.every(({ actor, depth }) => {
+          const next = recoveryPhysical.find((item) => item.actor === actor)
+          if (!next) return true
+          return blockedFrames > 18
+            ? next.depth <= depth + 0.025
+            : next.depth < depth - 0.001
+        })
+
+        if (!introducesNewConflict && improves) return recoveryStep
+      }
+      return 0
     }
 
+    // Inside the safety envelope but not physically touching: stay stopped.
     return 0
   }
 
+  self.group.userData.trafficBlockedFrames = 0
   let low = 0, high = requested
   for (let i = 0; i < 8; i++) {
     const mid = (low + high) / 2
