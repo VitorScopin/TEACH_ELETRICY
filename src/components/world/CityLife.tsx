@@ -164,7 +164,14 @@ function ParkingCarAgent({
       vehicleActors.current.set(id, ref.current)
       ref.current.userData.trafficActive = false
       ref.current.userData.trafficSpeed = 0
-      actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order: trafficOrder })
+      actors.current.set(id, {
+        group: ref.current,
+        length: 4.82,
+        width: 1.9,
+        order: trafficOrder,
+        priority: 2,
+        trafficClass: 'parking',
+      })
     }
     return () => {
       const spot = spotRef.current
@@ -284,10 +291,12 @@ function ParkingCarAgent({
       case 'parked':
         motionSpeed.current = 0
         group.userData.trafficSpeed = 0
+        group.userData.trafficActive = false
         parkedTimer.current += delta
         group.position.set(spot.position[0], 0.04, spot.position[2])
         group.rotation.y = spot.rotationY
         if (parkedTimer.current >= dwellSeconds) {
+          group.userData.trafficActive = true
           state.current = 'leaving-space'
           stateProgress.current = 0
         }
@@ -337,7 +346,14 @@ function RouteCar({ id, running, delay, curve, variant, color, actors, order }: 
     return { position: [point.x, 0.06, point.z] as [number, number, number], rotationY: -Math.atan2(tangent.z, tangent.x) }
   }
   useEffect(() => {
-    if (ref.current) { ref.current.userData.trafficActive = false; ref.current.userData.trafficSpeed = 0; actors.current.set(id, { group: ref.current, length: 4.82, width: 1.9, order }) }
+    if (ref.current) { ref.current.userData.trafficActive = false; ref.current.userData.trafficSpeed = 0; actors.current.set(id, {
+        group: ref.current,
+        length: 4.82,
+        width: 1.9,
+        order,
+        priority: 1,
+        trafficClass: 'city',
+      }) }
     return () => { actors.current.delete(id) }
   }, [id, actors, order])
   useFrame((_frame, deltaRaw) => {
