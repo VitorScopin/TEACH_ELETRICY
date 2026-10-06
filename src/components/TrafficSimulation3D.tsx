@@ -614,7 +614,14 @@ function TrafficCars({
                 node.userData.trafficActive = true
                 node.userData.trafficSpeed = car.speed
                 refs.current.set(car.id, node)
-                actors.current.set(`plc-${car.id}`, { group: node, length: car.length, width: 1.9, order: car.id })
+                actors.current.set(`plc-${car.id}`, {
+                  group: node,
+                  length: car.length,
+                  width: 1.9,
+                  order: car.id,
+                  priority: 0,
+                  trafficClass: 'plc',
+                })
               } else {
                 refs.current.delete(car.id)
                 actors.current.delete(`plc-${car.id}`)
