@@ -134,6 +134,32 @@ export function curvatureSpeedLimit(
   return Math.min(desiredSpeed, curveCap)
 }
 
+export function shouldStopForSignal({
+  red,
+  yellow,
+  green,
+  speed,
+  distanceToStopLine,
+  hasEnteredIntersection,
+}: {
+  red: boolean
+  yellow: boolean
+  green: boolean
+  speed: number
+  distanceToStopLine: number
+  hasEnteredIntersection: boolean
+}) {
+  if (hasEnteredIntersection) return false
+  if (red) return true
+  if (!green && !yellow) return true
+  if (green) return false
+
+  const comfortableStoppingDistance =
+    (speed * speed) / (2 * 3.8) + 0.9
+
+  return distanceToStopLine > comfortableStoppingDistance
+}
+
 export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtDistance: (distance: number) => VehiclePose, desiredSpeed: number) {
   const self = registry.current.get(id)
   if (!self) return desiredSpeed
