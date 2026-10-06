@@ -1,4 +1,9 @@
 const { app, BrowserWindow, ipcMain, safeStorage } = require('electron')
+
+app.setName('TEACH ELETRICY')
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.teacheletricy.desktop')
+}
 const path = require('node:path')
 const fs = require('node:fs')
 const { spawn } = require('node:child_process')
