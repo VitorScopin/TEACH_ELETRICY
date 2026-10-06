@@ -588,6 +588,37 @@ function RoundaboutDistrict() {
   )
 }
 
+function ShopBuilding({
+  x,
+  label,
+  accent,
+  facade,
+}: {
+  x: number
+  label: string
+  accent: string
+  facade: string
+}) {
+  const sign = useSignTexture(label, accent, 512, 150)
+
+  return (
+    <group position={[x, 0, 0]}>
+      <mesh position={[0, 1.85, 0]}>
+        <boxGeometry args={[5.8, 3.7, 5.0]} />
+        <meshStandardMaterial color={facade} roughness={0.76} />
+      </mesh>
+      <mesh position={[0, 1.45, -2.53]}>
+        <planeGeometry args={[4.6, 2.2]} />
+        <meshStandardMaterial color="#a9d9e7" emissive="#4b8898" emissiveIntensity={0.35} roughness={0.2} />
+      </mesh>
+      <mesh position={[0, 3.3, -2.58]}>
+        <planeGeometry args={[4.8, 1.25]} />
+        <meshBasicMaterial map={sign ?? undefined} color={sign ? '#ffffff' : accent} toneMapped={false} />
+      </mesh>
+    </group>
+  )
+}
+
 function CommercialStrip() {
   const shops = [
     { x: 12.2, label: 'FARMACIA', accent: '#39b66f', facade: '#d8ded7' },
@@ -597,25 +628,9 @@ function CommercialStrip() {
 
   return (
     <group position={[0, 0, 17.2]}>
-      {shops.map((shop) => {
-        const sign = useSignTexture(shop.label, shop.accent, 512, 150)
-        return (
-          <group key={shop.label} position={[shop.x, 0, 0]}>
-            <mesh position={[0, 1.85, 0]}>
-              <boxGeometry args={[5.8, 3.7, 5.0]} />
-              <meshStandardMaterial color={shop.facade} roughness={0.76} />
-            </mesh>
-            <mesh position={[0, 1.45, -2.53]}>
-              <planeGeometry args={[4.6, 2.2]} />
-              <meshStandardMaterial color="#a9d9e7" emissive="#4b8898" emissiveIntensity={0.35} roughness={0.2} />
-            </mesh>
-            <mesh position={[0, 3.3, -2.58]}>
-              <planeGeometry args={[4.8, 1.25]} />
-              <meshBasicMaterial map={sign ?? undefined} color={sign ? '#ffffff' : shop.accent} toneMapped={false} />
-            </mesh>
-          </group>
-        )
-      })}
+      {shops.map((shop) => (
+        <ShopBuilding key={shop.label} {...shop} />
+      ))}
     </group>
   )
 }
