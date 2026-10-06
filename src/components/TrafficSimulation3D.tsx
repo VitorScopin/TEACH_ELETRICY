@@ -16,7 +16,7 @@ import { SupermarketDistrict } from './world/SupermarketDistrict'
 import { CityLife } from './world/CityLife'
 import { BOULEVARD_START, CITY_LIMITS, CITY_BORDER } from './world/cityLayout'
 import { horizontalRoadPose, HORIZONTAL_ROAD_EXIT, WEST_TRAFFIC_SPAWN } from './world/roadGeometry'
-import { trafficSpeedLimit, safeVehicleStep, vehicleSpawnClear, boundedTrafficStep, shouldStopForSignal, type VehicleRegistry } from './world/vehicleTraffic'
+import { trafficSpeedLimit, safeVehicleStep, vehicleSpawnClear, boundedTrafficStep, type VehicleRegistry } from './world/vehicleTraffic'
 import { UrbanRoadNetwork } from './world/RoadNetwork'
 import { Planter, StreetLamp, Tree } from './world/StreetFurniture'
 import {
@@ -408,12 +408,6 @@ function applyWorldPosition(group: THREE.Group, flowId: FlowId, progress: number
   }
 }
 
-function deterministicSpawnInterval(flowId: FlowId, sequence: number) {
-  const base = flowId === 'eastbound' || flowId === 'westbound' ? 3.7 : 4.1
-  const phase = (sequence * 1.618 + FLOW_ORDER.indexOf(flowId) * 0.73) % 1
-  return base + (phase - 0.5) * 1.25
-}
-
 function TrafficCars({
   signals,
   running,
@@ -441,12 +435,6 @@ function TrafficCars({
     northbound: 1.15,
     southbound: 1.7,
   })
-  const spawnSequences = useRef<Record<FlowId, number>>({
-    eastbound: 0,
-    westbound: 1,
-    northbound: 2,
-    southbound: 3,
-  })
 
   useFrame((_state, deltaRaw) => {
     const delta = Math.min(deltaRaw, 0.05)
@@ -473,10 +461,7 @@ function TrafficCars({
 
       const tail = flowCars.length ? flowCars[flowCars.length - 1] : null
       const spawnClear = !tail || tail.progress > def.spawn + 10.5
-      const interval = deterministicSpawnInterval(
-        flowId,
-        spawnSequences.current[flowId],
-      )
+      const interval = flowId === 'eastbound' || flowId === 'westbound' ? 3.8 : 4.2
       const belowFlowLimit = flowCars.length < maxCarsPerFlow
 
       const spawnPose = flowId === 'eastbound' || flowId === 'westbound'
@@ -484,7 +469,6 @@ function TrafficCars({
         : { position: def.toWorld(def.spawn), rotationY: def.rotationY }
       if (spawnClocks.current[flowId] >= interval && spawnClear && belowFlowLimit && vehicleSpawnClear(actors, spawnPose, 4.82, 1.9)) {
         spawnClocks.current[flowId] = 0
-        spawnSequences.current[flowId] += 1
         const id = idRef.current++
         const kind = KINDS[id % KINDS.length]
         const variant = VEHICLE_VARIANTS[id % VEHICLE_VARIANTS.length]
@@ -498,7 +482,7 @@ function TrafficCars({
           flow: flowId,
           progress: def.spawn,
           speed: 0,
-          desiredSpeed: 5.15 + ((id * 7) % 6) * 0.28,
+          desiredSpeed: 5.6 + (id % 4) * 0.42,
           length: model.length,
           braking: false,
           clearedStopLine: false,
@@ -520,15 +504,7 @@ function TrafficCars({
         const front = car.progress + car.length / 2
         if (front > def.stopProgress + 0.01) car.clearedStopLine = true
         const hasEnteredIntersection = car.clearedStopLine || front > -TRAFFIC_WORLD.intersectionHalf
-        const distanceToStopLine = def.stopProgress - front
-        const mustStopForSignal = shouldStopForSignal({
-          red: signal.red,
-          yellow: signal.yellow,
-          green: signal.green,
-          speed: car.speed,
-          distanceToStopLine,
-          hasEnteredIntersection,
-        })
+        const mustStopForSignal = !signal.green && !hasEnteredIntersection
 
         let targetFront = Number.POSITIVE_INFINITY
 
@@ -537,9 +513,7 @@ function TrafficCars({
         }
 
         if (ahead) {
-          // Maintain a small standstill gap plus a speed-dependent time headway.
-          // This avoids the accordion effect when several cars queue at a red light.
-          const safeGap = 2.35 + Math.min(3.6, car.speed * 0.65)
+          const safeGap = Math.max(2.15, car.speed * 0.52)
           const aheadRear = ahead.progress - ahead.length / 2
           targetFront = Math.min(targetFront, aheadRear - safeGap)
         }
@@ -548,15 +522,10 @@ function TrafficCars({
         let targetSpeed = car.desiredSpeed
 
         if (Number.isFinite(targetFront)) {
-          if (distance <= 0.1) {
+          if (distance <= 0.08) {
             targetSpeed = 0
-          } else if (distance < 12) {
-            // Physical stopping-speed profile: begin easing off early instead of
-            // repeatedly snapping between cruise speed and zero.
-            const stoppingSpeed = Math.sqrt(
-              2 * 2.0 * Math.max(0, distance - 0.12),
-            )
-            targetSpeed = Math.min(targetSpeed, stoppingSpeed)
+          } else if (distance < 9) {
+            targetSpeed = Math.min(targetSpeed, Math.max(0, distance * 0.72))
           }
         }
 
@@ -584,7 +553,6 @@ function TrafficCars({
         const group = refs.current.get(car.id)
         if (group) {
           applyWorldPosition(group, flowId, car.progress)
-          group.userData.trafficSpeed = car.speed
           updateVehicleVisuals(group, car.speed, delta, car.braking)
         }
       })
@@ -612,16 +580,8 @@ function TrafficCars({
             ref={(node) => {
               if (node) {
                 node.userData.trafficActive = true
-                node.userData.trafficSpeed = car.speed
                 refs.current.set(car.id, node)
-                actors.current.set(`plc-${car.id}`, {
-                  group: node,
-                  length: car.length,
-                  width: 1.9,
-                  order: car.id,
-                  priority: 0,
-                  trafficClass: 'plc',
-                })
+                actors.current.set(`plc-${car.id}`, { group: node, length: car.length, width: 1.9, order: car.id })
               } else {
                 refs.current.delete(car.id)
                 actors.current.delete(`plc-${car.id}`)
