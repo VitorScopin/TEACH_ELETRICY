@@ -195,11 +195,13 @@ for (const reverse of [false, true]) {
     }
   })
 }
-const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep } = require('../src/components/world/vehicleTraffic.ts')
+const { vehicleBodiesOverlap, trafficSpeedLimit, safeVehicleStep, boundedTrafficStep, desiredFollowingGap } = require('../src/components/world/vehicleTraffic.ts')
 const pose = (x, z = 1.75, yaw = 0) => ({ position: [x, 0, z], rotationY: yaw })
-const actor = (p, order) => { const group = new THREE.Group(); group.position.set(...p.position); group.rotation.y = p.rotationY; return { group, length: 4.82, width: 1.9, order } }
-const registry = { current: new Map([['self', actor(pose(0), 1)], ['leader', actor(pose(8), 2)]]) }
+const actor = (p, order, speed = 0, priority = 1) => { const group = new THREE.Group(); group.position.set(...p.position); group.rotation.y = p.rotationY; group.userData.trafficSpeed = speed; return { group, length: 4.82, width: 1.9, order, priority } }
+const registry = { current: new Map([['self', actor(pose(0), 1, 6)], ['leader', actor(pose(8), 2, 2.5)]]) }
 const future = distance => pose(distance)
+assert(desiredFollowingGap(6) > desiredFollowingGap(0), 'following gap grows with speed')
+assert(desiredFollowingGap(0) >= 2.3, 'stopped traffic keeps a visible gap')
 assert(trafficSpeedLimit(registry, 'self', future, 8) < 8, 'following vehicle brakes before leader')
 assert(safeVehicleStep(registry, 'self', 5, future) < 3, 'body guard clamps following travel')
 assert(boundedTrafficStep(-12, 4.82, 8, 1, -9) < 0.6, 'red light prevents overshooting stop bar')
@@ -208,6 +210,24 @@ registry.current.set('leader', actor(pose(0, -1.75, Math.PI), 2))
 assert.equal(trafficSpeedLimit(registry, 'self', future, 8), 8, 'opposite lane stays independent')
 assert.equal(safeVehicleStep(registry, 'self', 5, future), 5, 'opposite lane does not block travel')
 assert(!vehicleBodiesOverlap(pose(0), 4.82, 1.9, pose(0, -1.75, Math.PI), 4.82, 1.9))
+
+const avenue = actor(pose(-20, 1.75, 0), 50, 5, 0)
+const marketAccess = actor(pose(-20, -5, -Math.PI / 2), 1, 2, 2)
+const marketRegistry = { current: new Map([['avenue', avenue], ['market', marketAccess]]) }
+assert.equal(
+  trafficSpeedLimit(marketRegistry, 'avenue', distance => pose(-20 + distance, 1.75, 0), 6),
+  6,
+  'main avenue does not stop early for supermarket access traffic',
+)
+assert(
+  trafficSpeedLimit(
+    marketRegistry,
+    'market',
+    distance => pose(-20, -5 + distance, -Math.PI / 2),
+    4,
+  ) < 4,
+  'supermarket access yields to main avenue',
+)
 const { URBAN_LOTS } = require('../src/components/world/urbanLayout.ts')
 assert(URBAN_LOTS.length >= 12, 'city has populated residential blocks')
 for (const lot of URBAN_LOTS) {
