@@ -27,6 +27,57 @@ npm run dev
 
 O modo **Simulação** funciona sem PLC.
 
+## Gerar aplicativo para Windows
+
+O projeto pode ser distribuído como um aplicativo desktop x64. O empacotamento gera:
+
+- instalador Windows (NSIS), com atalho na Área de Trabalho e Menu Iniciar;
+- executável portátil, que pode ser aberto sem instalação;
+- bridges OPC DA x86 e x64 self-contained dentro do pacote.
+
+### Requisitos apenas para quem gera o instalador
+
+- Windows 10/11 x64;
+- Node.js 22+;
+- npm;
+- .NET SDK 8, usado somente para compilar as bridges OPC DA.
+
+Quem recebe o aplicativo pronto **não precisa instalar Node.js, npm ou o .NET SDK**.
+
+Depois de clonar/atualizar o projeto:
+
+```bat
+npm install
+npm run dist:windows
+```
+
+Os arquivos de distribuição ficam em:
+
+```text
+release\
+```
+
+Também é possível gerar separadamente:
+
+```bat
+npm run dist:installer
+npm run dist:portable
+```
+
+O GitHub Actions possui um workflow de empacotamento Windows que gera os executáveis automaticamente e publica os arquivos como artifacts do workflow.
+
+> Os executáveis ainda não possuem assinatura digital de Code Signing. Em outra máquina, o Windows SmartScreen pode exibir um aviso de editor desconhecido. Isso não impede a instalação, mas para uma distribuição comercial é recomendado assinar o instalador e o executável.
+
+### Dados do usuário
+
+Configurações e o snapshot do projeto não são gravados dentro da pasta de instalação. O Electron utiliza a pasta `userData` do Windows e salva o arquivo `teach-project.json` lá. Assim, atualizar/reinstalar o aplicativo não depende de escrever dentro de `Program Files`.
+
+### OPC DA em outro computador
+
+As bridges x86/x64 vão dentro do aplicativo. Porém, o servidor OPC DA utilizado pela instalação industrial ainda precisa estar corretamente instalado/registrado no computador de destino, pois OPC DA depende do ambiente COM/DCOM do Windows.
+
+---
+
 ## Conectar um PLC Siemens
 
 Na tela do laboratório informe:
