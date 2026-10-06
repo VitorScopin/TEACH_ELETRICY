@@ -1,6 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('teachElectrify', {
+  project: {
+    load: () => ipcRenderer.invoke('project:load'),
+    save: (snapshot) => ipcRenderer.invoke('project:save', snapshot),
+    reset: () => ipcRenderer.invoke('project:reset'),
+  },
   windowControls: {
     minimize: () => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: () => ipcRenderer.invoke('window:toggle-maximize'),
