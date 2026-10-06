@@ -4,7 +4,14 @@ import type { Group } from 'three'
 import { ROUNDABOUT } from './cityLayout'
 
 export type VehiclePose = { position: [number, number, number]; rotationY: number }
-export type VehicleActor = { group: Group; length: number; width: number; order: number }
+export type VehicleActor = {
+  group: Group
+  length: number
+  width: number
+  order: number
+  priority?: number
+  trafficClass?: 'plc' | 'city' | 'parking'
+}
 export type VehicleRegistry = MutableRefObject<Map<string, VehicleActor>>
 
 const FOLLOWING_MIN_GAP = 2.4
@@ -14,6 +21,27 @@ const FOLLOWING_LOOKAHEAD = 18
 function actorSpeed(actor: VehicleActor) {
   const speed = actor.group.userData.trafficSpeed
   return typeof speed === 'number' && Number.isFinite(speed) ? Math.max(0, speed) : 0
+}
+
+function actorPriority(actor: VehicleActor) {
+  // Lower number = stronger road priority.
+  // Main PLC avenue > ordinary city roads > supermarket/parking access.
+  return actor.priority ?? (
+    actor.trafficClass === 'plc'
+      ? 0
+      : actor.trafficClass === 'city'
+        ? 1
+        : actor.trafficClass === 'parking'
+          ? 2
+          : 1
+  )
+}
+
+function otherHasPriority(self: VehicleActor, other: VehicleActor) {
+  const selfPriority = actorPriority(self)
+  const otherPriority = actorPriority(other)
+  if (otherPriority !== selfPriority) return otherPriority < selfPriority
+  return other.order < self.order
 }
 
 export function desiredFollowingGap(speed: number) {
@@ -288,7 +316,7 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
       } else if (
         otherRoundabout.approaching &&
         !otherRoundabout.committed &&
-        other.order < self.order &&
+        otherHasPriority(self, other) &&
         separation < 22
       ) {
         limit = Math.min(limit, roundaboutYieldSpeed(selfRoundabout.clearance))
@@ -301,7 +329,7 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
     // heading rays. This lets the lower-priority vehicle brake before the
     // conflict point instead of relying on last-second body overlap.
     if (
-      other.order < self.order &&
+      otherHasPriority(self, other) &&
       !selfRoundabout.approaching &&
       !selfRoundabout.circulating &&
       !otherRoundabout.approaching &&
@@ -369,7 +397,7 @@ export function trafficSpeedLimit(registry: VehicleRegistry, id: string, poseAtD
         !otherRoundabout.circulating &&
         !selfRoundabout.committed &&
         !otherRoundabout.committed &&
-        other.order < self.order
+        otherHasPriority(self, other)
       )
 
     if (!yieldToOther) continue
@@ -442,7 +470,7 @@ export function safeVehicleStep(registry: VehicleRegistry, id: string, requested
       ({ actor }) => !currentActors.has(actor),
     )
     const ownsPriority = currentBlockers.every(
-      ({ actor }) => self.order < actor.order,
+      ({ actor }) => !otherHasPriority(self, actor),
     )
     const reducesEveryConflict = currentBlockers.every(({ actor, depth }) => {
       const next = recoveryBlockers.find((item) => item.actor === actor)
