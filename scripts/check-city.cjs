@@ -208,6 +208,39 @@ registry.current.set('leader', actor(pose(0, -1.75, Math.PI), 2))
 assert.equal(trafficSpeedLimit(registry, 'self', future, 8), 8, 'opposite lane stays independent')
 assert.equal(safeVehicleStep(registry, 'self', 5, future), 5, 'opposite lane does not block travel')
 assert(!vehicleBodiesOverlap(pose(0), 4.82, 1.9, pose(0, -1.75, Math.PI), 4.82, 1.9))
+
+// Roundabout approach must yield early to circulating traffic, not only at collision distance.
+const westApproachPose = pose(37, ROUNDABOUT.center[1], 0)
+const circulatingPose = pose(
+  ROUNDABOUT.center[0],
+  ROUNDABOUT.center[1] + ROUNDABOUT.laneRadius,
+  0,
+)
+const roundaboutRegistry = {
+  current: new Map([
+    ['approach', actor(westApproachPose, 20)],
+    ['circle', actor(circulatingPose, 10)],
+  ]),
+}
+const westApproachFuture = distance => pose(37 + distance, ROUNDABOUT.center[1], 0)
+assert(
+  trafficSpeedLimit(roundaboutRegistry, 'approach', westApproachFuture, 8) < 4,
+  'approaching traffic slows before occupied roundabout',
+)
+
+// Simultaneous entries use deterministic priority so two approaches do not charge the circle together.
+const northApproachPose = pose(ROUNDABOUT.center[0], -43, -Math.PI / 2)
+const simultaneousRegistry = {
+  current: new Map([
+    ['west-entry', actor(westApproachPose, 10)],
+    ['north-entry', actor(northApproachPose, 30)],
+  ]),
+}
+const northFuture = distance => pose(ROUNDABOUT.center[0], -43 + distance, -Math.PI / 2)
+assert(
+  trafficSpeedLimit(simultaneousRegistry, 'north-entry', northFuture, 8) < 8,
+  'lower-priority simultaneous entry yields before roundabout',
+)
 const { URBAN_LOTS } = require('../src/components/world/urbanLayout.ts')
 assert(URBAN_LOTS.length >= 12, 'city has populated residential blocks')
 for (const lot of URBAN_LOTS) {
