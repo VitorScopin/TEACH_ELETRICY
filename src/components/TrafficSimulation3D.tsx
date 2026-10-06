@@ -10,6 +10,7 @@ import {
 import type { IntersectionTrafficState, SignalId, TrafficState } from '../types'
 import { CityDistricts } from './world/CityDistricts'
 import { CityLife } from './world/CityLife'
+import { UrbanRoadNetwork } from './world/RoadNetwork'
 import { Planter, StreetLamp, Tree } from './world/StreetFurniture'
 import {
   RealisticCarModel,
@@ -368,20 +369,6 @@ function RoadScene({
         <meshStandardMaterial color="#10191e" roughness={0.99} />
       </mesh>
 
-      {/* Secondary city streets make the district feel larger without affecting PLC traffic logic */}
-      {[-27, 27].map((z) => (
-        <mesh key={`outer-road-z-${z}`} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.015, z]}>
-          <planeGeometry args={[110, 7.5]} />
-          <meshStandardMaterial color="#1d2428" roughness={0.92} />
-        </mesh>
-      ))}
-      {[-39, 39].map((x) => (
-        <mesh key={`outer-road-x-${x}`} rotation={[-Math.PI / 2, 0, 0]} position={[x, -0.012, 0]}>
-          <planeGeometry args={[7.5, 86]} />
-          <meshStandardMaterial color="#1d2428" roughness={0.92} />
-        </mesh>
-      ))}
-
       {/* Asphalt roads crossing at 90 degrees */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
         <planeGeometry args={[TRAFFIC_WORLD.roadLength, TRAFFIC_WORLD.roadWidth]} />
@@ -511,6 +498,11 @@ function RoadScene({
 
       {quality !== 'low' && (
         <>
+          <UrbanRoadNetwork
+            quality={quality}
+            rain={rain}
+            nightFactor={nightFactor}
+          />
           <UrbanProps dense={quality === 'high'} nightFactor={nightFactor} />
           <CityDistricts quality={quality} rain={rain} nightFactor={nightFactor} />
         </>
@@ -532,6 +524,49 @@ type FlowDefinition = {
 const VERTICAL_SPAWN = -(TRAFFIC_WORLD.worldDepth / 2 - 1)
 const VERTICAL_EXIT = TRAFFIC_WORLD.worldDepth / 2 - 1
 
+const EAST_ROAD_CURVE = new THREE.CatmullRomCurve3(
+  [
+    new THREE.Vector3(-31, 0.02, 0),
+    new THREE.Vector3(-18, 0.02, 0),
+    new THREE.Vector3(-7, 0.02, 0),
+    new THREE.Vector3(7, 0.02, 0),
+    new THREE.Vector3(16, 0.02, -1.0),
+    new THREE.Vector3(24, 0.02, -4.2),
+    new THREE.Vector3(31, 0.02, -9.2),
+  ],
+  false,
+  'catmullrom',
+  0.28,
+)
+
+function horizontalRoadPose(
+  progress: number,
+  laneOffset: number,
+  reverse = false,
+) {
+  const normalized = THREE.MathUtils.clamp(
+    (progress - TRAFFIC_WORLD.spawnX) / (TRAFFIC_WORLD.exitX - TRAFFIC_WORLD.spawnX),
+    0,
+    1,
+  )
+  const t = reverse ? 1 - normalized : normalized
+  const point = EAST_ROAD_CURVE.getPointAt(t)
+  const tangent = EAST_ROAD_CURVE.getTangentAt(Math.min(0.999, Math.max(0.001, t)))
+  const length = Math.max(0.0001, Math.hypot(tangent.x, tangent.z))
+  const nx = -tangent.z / length
+  const nz = tangent.x / length
+  const signedOffset = reverse ? -laneOffset : laneOffset
+
+  return {
+    position: [
+      point.x + nx * signedOffset,
+      0.02,
+      point.z + nz * signedOffset,
+    ] as [number, number, number],
+    rotationY: -Math.atan2(tangent.z, tangent.x) + (reverse ? Math.PI : 0),
+  }
+}
+
 const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
   eastbound: {
     id: 'eastbound',
@@ -540,7 +575,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
     stopProgress: TRAFFIC_GEOMETRY.westStopLineX,
     rotationY: 0,
     signalId: 'west',
-    toWorld: (progress) => [progress, 0.02, TRAFFIC_WORLD.eastboundLaneZ],
+    toWorld: (progress) => horizontalRoadPose(progress, TRAFFIC_WORLD.eastboundLaneZ).position,
   },
   westbound: {
     id: 'westbound',
@@ -549,7 +584,7 @@ const FLOW_DEFINITIONS: Record<FlowId, FlowDefinition> = {
     stopProgress: -TRAFFIC_GEOMETRY.eastStopLineX,
     rotationY: Math.PI,
     signalId: 'east',
-    toWorld: (progress) => [-progress, 0.02, TRAFFIC_WORLD.westboundLaneZ],
+    toWorld: (progress) => horizontalRoadPose(progress, Math.abs(TRAFFIC_WORLD.westboundLaneZ), true).position,
   },
   northbound: {
     id: 'northbound',
@@ -575,12 +610,18 @@ const FLOW_ORDER: FlowId[] = ['eastbound', 'westbound', 'northbound', 'southboun
 
 function applyWorldPosition(group: THREE.Group, flowId: FlowId, progress: number) {
   switch (flowId) {
-    case 'eastbound':
-      group.position.set(progress, 0.02, TRAFFIC_WORLD.eastboundLaneZ)
+    case 'eastbound': {
+      const pose = horizontalRoadPose(progress, TRAFFIC_WORLD.eastboundLaneZ)
+      group.position.set(...pose.position)
+      group.rotation.y = pose.rotationY
       break
-    case 'westbound':
-      group.position.set(-progress, 0.02, TRAFFIC_WORLD.westboundLaneZ)
+    }
+    case 'westbound': {
+      const pose = horizontalRoadPose(progress, Math.abs(TRAFFIC_WORLD.westboundLaneZ), true)
+      group.position.set(...pose.position)
+      group.rotation.y = pose.rotationY
       break
+    }
     case 'northbound':
       group.position.set(TRAFFIC_WORLD.eastboundLaneZ, 0.02, -progress)
       break
@@ -772,7 +813,15 @@ function TrafficCars({
               else refs.current.delete(car.id)
             }}
             position={def.toWorld(car.progress)}
-            rotation={[0, def.rotationY, 0]}
+            rotation={[
+              0,
+              car.flow === 'eastbound'
+                ? horizontalRoadPose(car.progress, TRAFFIC_WORLD.eastboundLaneZ).rotationY
+                : car.flow === 'westbound'
+                  ? horizontalRoadPose(car.progress, Math.abs(TRAFFIC_WORLD.westboundLaneZ), true).rotationY
+                  : def.rotationY,
+              0,
+            ]}
           >
             <Suspense fallback={null}>
               <RealisticCarModel variant={car.variant} color={car.color} />
