@@ -2231,3 +2231,96 @@ main {
   font-size:7.5px;
   line-height:1.5;
 }
+
+
+/* --- Independent world environment controls --- */
+.environment-settings-card {
+  display:grid;
+  gap:10px;
+  padding:11px;
+  border:1px solid rgba(71,158,187,.2);
+  border-radius:9px;
+  background:linear-gradient(145deg,rgba(7,37,49,.58),rgba(4,22,30,.72));
+}
+.environment-settings-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.environment-settings-head span {
+  display:block;
+  color:#43dbe0;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.1em;
+}
+.environment-settings-head strong {
+  display:block;
+  margin-top:3px;
+  color:#edf7fa;
+  font-size:11px;
+}
+.environment-settings-head > b {
+  padding:5px 8px;
+  border:1px solid rgba(82,181,211,.25);
+  border-radius:6px;
+  background:#071923;
+  color:#ccecf5;
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+  font-size:9px;
+}
+.environment-settings-card label {
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:center;
+  gap:6px;
+  color:#819ba5;
+  font-size:7.5px;
+  font-weight:800;
+}
+.environment-settings-card label > input[type="range"] {
+  grid-column:1 / -1;
+  width:100%;
+  accent-color:#43dcd6;
+}
+.environment-settings-card label > small {
+  justify-self:end;
+  color:#6f8993;
+  font-size:7px;
+  font-weight:700;
+}
+.environment-settings-card label > b {
+  color:#cce9ef;
+  font-size:7px;
+}
+.environment-settings-card > small {
+  color:#6f8790;
+  font-size:7px;
+  line-height:1.45;
+}
+.environment-toggle-row {
+  display:grid;
+  grid-template-columns:1fr 84px;
+  gap:7px;
+}
+.environment-toggle-row button,
+.environment-toggle-row select {
+  height:30px;
+  border:1px solid rgba(69,143,168,.24);
+  border-radius:6px;
+  background:#071923;
+  color:#8da9b3;
+  font-size:7px;
+}
+.environment-toggle-row button {
+  cursor:pointer;
+}
+.environment-toggle-row button.active {
+  border-color:rgba(48,220,203,.42);
+  background:rgba(17,98,102,.28);
+  color:#b9fff6;
+}
+.environment-toggle-row select:disabled {
+  opacity:.45;
+}
