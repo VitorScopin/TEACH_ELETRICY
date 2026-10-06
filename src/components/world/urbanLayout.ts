@@ -1,13 +1,13 @@
-import { CITY_ROADS, MAIN_ROADS, CITY_FRAME_BUILDINGS, ROUNDABOUT } from './cityLayout'
+import { CITY_ROADS, MAIN_ROADS, SUPERMARKET_DRIVEWAYS, CITY_FRAME_BUILDINGS, ROUNDABOUT } from './cityLayout'
 import { roadCurve, roadWidthAt } from './roadGeometry'
 
-const samples = [...Object.values(CITY_ROADS), ...MAIN_ROADS].flatMap(road => {
+const samples = [...Object.values(CITY_ROADS), ...Object.values(SUPERMARKET_DRIVEWAYS), ...MAIN_ROADS].flatMap(road => {
   const curve = roadCurve(road.points)
   return Array.from({ length: 401 }, (_, i) => ({ point: curve.getPointAt(i / 400), halfWidth: roadWidthAt(road, i / 400) / 2, clearance: roadWidthAt(road, i / 400) / 2 + (road.curbWidth ?? 0) + (road.sidewalkWidth ?? 0) + 0.6 }))
 })
 const distanceToLot = (x: number, z: number, px: number, pz: number) => Math.hypot(Math.max(0, Math.abs(px - x) - 4), Math.max(0, Math.abs(pz - z) - 4.5))
 const reserved = [
-  { x: -26, z: -32, width: 38, depth: 38 }, // supermarket, parking and walks
+  { x: -26, z: -39, width: 38, depth: 38 }, // supermarket, parking and walks
   { x: 26, z: 13, width: 40, depth: 26 }, // shops and service station
   { x: -25, z: 25, width: 21, depth: 12 }, // public garden
 ]

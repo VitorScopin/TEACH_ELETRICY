@@ -133,7 +133,7 @@ export function SupermarketDistrict({ quality, rain, nightFactor }: { quality: Q
   const crossing = SUPERMARKET.crossing
   const walk = SUPERMARKET.frontWalk
   const transfer = SUPERMARKET.accessibleTransfer
-  const streetArrow = CITY_ROADS.supermarketAccess.points[4]
+  const streetArrow = CITY_ROADS.supermarketAccess.points[(SUPERMARKET.accessEntryIndex + SUPERMARKET.accessExitIndex) / 2]
   const ramp = useMemo(() => {
     const half = crossing.width / 2
     const geometry = new THREE.BufferGeometry()
@@ -175,8 +175,8 @@ export function SupermarketDistrict({ quality, rain, nightFactor }: { quality: Q
     </group>)}
     <GroundArrow position={[streetArrow[0], 0.06, streetArrow[1] + 1.75]} rotationY={Math.PI / 2} />
     <GroundArrow position={[streetArrow[0], 0.06, streetArrow[1] - 1.75]} rotationY={-Math.PI / 2} />
-    <GroundArrow position={[SUPERMARKET.entryX, 0.045, -19]} rotationY={Math.PI} />
-    <GroundArrow position={[SUPERMARKET.exitX, 0.045, -21]} />
+    <GroundArrow position={[SUPERMARKET.entryX, 0.045, SUPERMARKET.parkingEntrance[1] - 1]} rotationY={Math.PI} />
+    <GroundArrow position={[SUPERMARKET.exitX, 0.045, SUPERMARKET.parkingExit[1] - 2]} />
     {[-34, -17].map(x => <GroundArrow key={x} position={[x, 0.045, SUPERMARKET.aisleZ]} rotationY={Math.PI / 2} />)}
     <group position={SUPERMARKET.totem}>
       <Block position={[0, 2.3, 0]} size={[0.25, 4.6, 0.25]} color="#52646a" />

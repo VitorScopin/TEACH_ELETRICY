@@ -96,7 +96,7 @@ function accessLanePoints(from: number, to: number, reverse = false) {
 }
 
 export function parkingApproachCurve(spot: ParkingSpotDefinition) {
-  const entryT = SUPERMARKET.accessEntryIndex / (CITY_ROADS.supermarketAccess.points.length - 1) - 0.07
+  const entryT = (SUPERMARKET.accessEntryIndex - 0.5) / (CITY_ROADS.supermarketAccess.points.length - 1)
   const laneStart = accessLanePoint(0)
   const mainTurn = new THREE.CubicBezierCurve3(
     new THREE.Vector3(CITY_ROADS.supermarketAccess.points[0][0] - 5, 0, SUPERMARKET.approachSpawn[1]),

@@ -258,3 +258,26 @@ const { vehicleSpawnClear } = require('../src/components/world/vehicleTraffic.ts
 registry.current.get('leader').group.userData.trafficActive = true
 assert(!vehicleSpawnClear(registry, pose(8), 4.82, 1.9, 'self'), 'spawn waits for occupied lane')
 assert(vehicleSpawnClear(registry, pose(-12), 4.82, 1.9, 'self'), 'spawn accepts clear entry')
+
+// Market frontage has room for two independent sidewalks and a planted separator.
+const marketRoad = CITY_ROADS.supermarketAccess
+const marketCurve = roadCurve(marketRoad.points)
+const marketSide = marketRoad.width / 2 + marketRoad.curbWidth + marketRoad.sidewalkWidth
+const avenueSide = MAIN_ROADS[0].width / 2 + MAIN_ROADS[0].curbWidth + MAIN_ROADS[0].sidewalkWidth
+const parkingStreetEdge = SUPERMARKET.parkingCenter[2] + SUPERMARKET.parkingSize[1] / 2
+for (let i = 0; i <= 100; i++) {
+  const point = marketCurve.getPoint((5 + 2 * i / 100) / (marketRoad.points.length - 1))
+  assert(Math.abs(point.z) - marketSide - avenueSide > 2, 'market street sidewalk clears avenue sidewalk')
+  assert(point.z - marketSide >= parkingStreetEdge, 'frontage sidewalk stays outside parking stalls')
+  assert(Math.abs(point.z + 19) < 0.001, 'market frontage is straight between accesses')
+}
+assert.equal(marketRoad.accesses.length, 2)
+for (const [key, node] of [['entry', 0], ['exit', -1]]) {
+  const mouth = SUPERMARKET_DRIVEWAYS[key].points.at(node)
+  assert(marketRoad.accesses.some(a => Math.hypot(a.point[0] - mouth[0], a.point[1] - mouth[1]) < 0.01 && a.width >= SUPERMARKET.drivewayWidth), 'driveway has an aligned curb opening')
+}
+for (const building of CITY_FRAME_BUILDINGS) {
+  const half = ({ small: 7, medium: 9, large: 12 }[building.variant]) * (building.scale ?? 1) / 2
+  assert(Math.abs(building.position[0] - SUPERMARKET.position[0]) >= half + SUPERMARKET.buildingSize[0] / 2 || Math.abs(building.position[2] - SUPERMARKET.position[2]) >= half + SUPERMARKET.buildingSize[2] / 2, 'market building clears neighbouring buildings')
+}
+console.log('Market frontage, independent sidewalks, driveway openings and relocated building clearances passed.')

@@ -38,6 +38,48 @@ function buildRibbonGeometry(points: Vec2Point[], width: number, y = 0, endWidth
   return geometry
 }
 
+// Sidewalks and curbs are side bands; they do not occupy the road underneath.
+// Leave actual openings at junctions and driveways instead of painting over a curb.
+function buildShoulderGeometry(road: CityRoadDefinition, innerExtra: number, outerExtra: number, y: number) {
+  const curve = curveFrom(road.points)
+  const count = Math.min(256, Math.max(48, road.points.length * 24))
+  const vertices: number[] = [], indices: number[] = []
+  for (const side of [-1, 1] as const) {
+    const base = vertices.length / 3
+    for (let i = 0; i <= count; i++) {
+      const t = i / count, point = curve.getPointAt(t), tangent = curve.getTangentAt(t)
+      const half = roadWidthAt(road, t) / 2
+      for (const extra of [innerExtra, outerExtra]) {
+        vertices.push(point.x - tangent.z * side * (half + extra), y, point.z + tangent.x * side * (half + extra))
+      }
+      if (i === count) continue
+      const mid = curve.getPointAt((i + 0.5) / count)
+      if (road.accesses?.some(access => access.side === side && Math.hypot(mid.x - access.point[0], mid.z - access.point[1]) < access.width / 2)) continue
+      const n = base + i * 2
+      if (side === 1) indices.push(n, n + 1, n + 2, n + 1, n + 3, n + 2)
+      else indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3)
+    }
+  }
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+  geometry.setIndex(indices); geometry.computeVertexNormals()
+  return geometry
+}
+
+function edgeSegments(road: CityRoadDefinition, points: Vec2Point[], side: -1 | 1) {
+  const result: Vec2Point[][] = [], current: Vec2Point[] = []
+  for (const p of points) {
+    // Edges run at half road width; expand the circular mouth by that offset.
+    const blocked = road.accesses?.some(access => access.side === side && Math.hypot(p[0] - access.point[0], p[1] - access.point[1]) < Math.hypot(access.width / 2, road.width * 0.485))
+    if (blocked) {
+      if (current.length > 1) result.push(current.splice(0))
+      else current.length = 0
+    } else current.push(p)
+  }
+  if (current.length > 1) result.push(current)
+  return result
+}
+
 function offsetPath(road: CityRoadDefinition, fraction: number): Vec2Point[] {
   const curve = curveFrom(road.points)
   return Array.from({ length: 161 }, (_, i) => {
@@ -61,12 +103,12 @@ function RoadRibbon({
   const sidewalkWidth = road.sidewalkWidth ?? 0
   const curbWidth = road.curbWidth ?? 0
   const sidewalkGeometry = useMemo(
-    () => buildRibbonGeometry(road.points, road.width + 2 * (curbWidth + sidewalkWidth), 0.012, (road.endWidth ?? road.width) + 2 * (curbWidth + sidewalkWidth)),
-    [road.points, road.width, road.endWidth, curbWidth, sidewalkWidth],
+    () => buildShoulderGeometry(road, curbWidth, curbWidth + sidewalkWidth, 0.012),
+    [road, curbWidth, sidewalkWidth],
   )
   const curbGeometry = useMemo(
-    () => buildRibbonGeometry(road.points, road.width + 2 * curbWidth, 0.020, (road.endWidth ?? road.width) + 2 * curbWidth),
-    [road.points, road.width, road.endWidth, curbWidth],
+    () => buildShoulderGeometry(road, 0, curbWidth, 0.020),
+    [road, curbWidth],
   )
   const roadGeometry = useMemo(
     () => buildRibbonGeometry(road.points, road.width, 0.028, road.endWidth ?? road.width),
@@ -150,7 +192,7 @@ function RoadMarkings({ road }: { road: CityRoadDefinition }) {
     const trim = (points: Vec2Point[]) => inset ? points.slice(inset, points.length - inset) : points
     return {
       center: trim(offsetPath(road, 0)),
-      edges: [-0.485, 0.485].map(f => trim(offsetPath(road, f))),
+      edges: ([-1, 1] as const).flatMap(side => edgeSegments(road, trim(offsetPath(road, side * 0.485)), side)),
       dividers: [-0.25, 0.25].map(f => { const points = trim(offsetPath(road, f)); return (road.endWidth ?? road.width) < road.width ? points.slice(0, 85) : points }),
     }
   }, [road])
@@ -340,6 +382,11 @@ export function UrbanRoadNetwork({
       {MAIN_ROADS.map((road) => <RoadRibbon key={road.id} road={road} surface={false} />)}
       <RoadRibbon road={CITY_ROADS.supermarketAccess} rain={rain} />
       <RoadMarkings road={CITY_ROADS.supermarketAccess} />
+      <mesh position={[-32, 0.05, -11.5]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[8, 3]} />
+        <meshStandardMaterial color="#587451" roughness={1} />
+      </mesh>
+      {quality !== 'low' && <Tree position={[-32, 0.06, -11.5]} scale={0.65} />}
       {Object.values(SUPERMARKET_DRIVEWAYS).map(road => <RoadRibbon key={road.id} road={road} rain={rain} />)}
       <RoadRibbon road={boulevard} rain={rain} />
       <RoadMarkings road={boulevard} />

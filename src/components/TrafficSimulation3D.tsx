@@ -217,7 +217,7 @@ function UrbanProps({
   nightFactor?: number
 }) {
   const trees: Array<[number, number, number]> = [
-    [-14, 0.04, 10.8], [14, 0.04, 11], [-38, 0.04, -35],
+    [-14, 0.04, 10.8], [14, 0.04, 11], [-44, 0.04, -43],
     [38, 0.04, 23], [-38, 0.04, 34], [18, 0.04, -46],
   ]
   const lamps: Array<[number, number, number]> = [
