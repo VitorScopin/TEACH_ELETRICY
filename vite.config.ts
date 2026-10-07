@@ -7,5 +7,12 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    watch: {
+      ignored: [
+        '**/electron/opc-da-bridge/**/bin/**',
+        '**/electron/opc-da-bridge/**/obj/**',
+        '**/electron/opc-da-bridge/**/*.tmp',
+      ],
+    },
   },
 })
