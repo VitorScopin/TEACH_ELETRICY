@@ -1,0 +1,59 @@
+name: Windows Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/semaforo-mvp]
+    tags: ['v*']
+
+jobs:
+  package-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install dependencies
+        shell: cmd
+        run: npm install --no-audit --no-fund
+
+      - name: Validate project
+        shell: cmd
+        run: |
+          npm run build
+          node scripts\check-city.cjs
+          node --check electron\main.cjs
+          node --check electron\preload.cjs
+
+      - name: Build Windows installer and portable app
+        shell: cmd
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist:windows
+
+      - name: Show packaged files
+        shell: powershell
+        run: Get-ChildItem -Path release -Recurse | Select-Object FullName, Length
+
+      - name: Upload Windows executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: TEACH-ELETRICY-Windows-${{ github.sha }}
+          path: |
+            release/*.exe
+            release/*.yml
+            release/*.blockmap
+          if-no-files-found: error
+          retention-days: 14
