@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo.
@@ -24,6 +24,20 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo [PREPARACAO] Fechando instancia antiga do TEACH ELETRICY...
+taskkill /F /IM TEACH-ELETRICY.exe >nul 2>nul
+
+echo [PREPARACAO] Limpando saida antiga...
+call :clean_release
+if errorlevel 1 (
+  echo.
+  echo [ERRO] A pasta release continua bloqueada.
+  echo Feche qualquer janela do Explorer aberta em release e qualquer instancia do TEACH ELETRICY.
+  echo Se o Windows Defender estiver verificando a pasta, aguarde alguns segundos e rode novamente.
+  pause
+  exit /b 1
+)
+
 if not exist node_modules (
   echo [1/4] Instalando dependencias...
   call npm install
@@ -41,7 +55,7 @@ call npm run build
 if errorlevel 1 goto :error
 
 echo [4/4] Gerando instalador e versao portatil...
-call npx electron-builder --win nsis portable --x64 --publish never
+call :build_release
 if errorlevel 1 goto :error
 
 echo.
@@ -62,9 +76,51 @@ explorer "%CD%\release"
 pause
 exit /b 0
 
+:clean_release
+for /L %%I in (1,1,6) do (
+  if exist "release\win-unpacked.tmp" rmdir /s /q "release\win-unpacked.tmp" >nul 2>nul
+  if exist "release\win-unpacked" rmdir /s /q "release\win-unpacked" >nul 2>nul
+
+  if not exist "release\win-unpacked.tmp" if not exist "release\win-unpacked" (
+    if exist "release" rmdir /s /q "release" >nul 2>nul
+    if not exist "release" exit /b 0
+  )
+
+  echo   Aguardando o Windows liberar arquivos... tentativa %%I/6
+  timeout /t 2 /nobreak >nul
+)
+if exist "release\win-unpacked.tmp" exit /b 1
+if exist "release\win-unpacked" exit /b 1
+if exist "release" (
+  rmdir /s /q "release" >nul 2>nul
+  if exist "release" exit /b 1
+)
+exit /b 0
+
+:build_release
+for /L %%I in (1,1,3) do (
+  echo   Empacotamento tentativa %%I/3...
+  call npx electron-builder --win nsis portable --x64 --publish never
+  if not errorlevel 1 exit /b 0
+
+  echo.
+  echo   O Windows bloqueou algum arquivo durante o empacotamento.
+  echo   Limpando temporarios para tentar novamente...
+  taskkill /F /IM TEACH-ELETRICY.exe >nul 2>nul
+  timeout /t 3 /nobreak >nul
+  call :clean_release
+  timeout /t 2 /nobreak >nul
+)
+exit /b 1
+
 :error
 echo.
 echo [ERRO] Nao foi possivel gerar o aplicativo.
 echo Veja a mensagem acima para identificar a etapa que falhou.
+echo.
+echo Se aparecer EPERM novamente:
+echo   1. Feche a pasta release no Explorer.
+echo   2. Feche qualquer TEACH ELETRICY aberto.
+echo   3. Rode este arquivo novamente como Administrador.
 pause
 exit /b 1
