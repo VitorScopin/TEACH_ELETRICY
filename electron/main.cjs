@@ -210,10 +210,13 @@ function opcDaBridgeCandidates(architecture = 'auto') {
   const x86 = []
   const x64 = []
   for (const root of roots) {
-    x86.push(path.join(root, 'opc-da-bridge-x86.exe'))
+    // The .NET bridge is framework self-contained but not a single-file app:
+    // keep its managed/runtime DLLs beside the executable. Prefer the full
+    // publish folder in packaged builds.
     x86.push(path.join(root, 'publish', 'x86', 'opc-da-bridge-x86.exe'))
-    x64.push(path.join(root, 'opc-da-bridge-x64.exe'))
+    x86.push(path.join(root, 'opc-da-bridge-x86.exe'))
     x64.push(path.join(root, 'publish', 'x64', 'opc-da-bridge-x64.exe'))
+    x64.push(path.join(root, 'opc-da-bridge-x64.exe'))
   }
 
   const order =
