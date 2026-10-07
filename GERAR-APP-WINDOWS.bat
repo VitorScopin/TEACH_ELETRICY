@@ -50,6 +50,25 @@ echo [2/4] Compilando bridges OPC DA...
 call npm run build:opcda
 if errorlevel 1 goto :error
 
+if not exist "electron\opc-da-bridge\publish\x64\opc-da-bridge-x64.exe" (
+  echo [ERRO] Executavel OPC DA x64 nao foi publicado.
+  goto :error
+)
+if not exist "electron\opc-da-bridge\publish\x64\opc-da-bridge-x64.dll" (
+  echo [ERRO] DLL OPC DA x64 nao foi publicada.
+  goto :error
+)
+if not exist "electron\opc-da-bridge\publish\x86\opc-da-bridge-x86.exe" (
+  echo [ERRO] Executavel OPC DA x86 nao foi publicado.
+  goto :error
+)
+if not exist "electron\opc-da-bridge\publish\x86\opc-da-bridge-x86.dll" (
+  echo [ERRO] DLL OPC DA x86 nao foi publicada.
+  goto :error
+)
+
+echo [OK] Bridges OPC DA completas: EXE + DLL + runtime.
+
 echo [3/4] Compilando aplicacao...
 call npm run build
 if errorlevel 1 goto :error
@@ -67,10 +86,10 @@ echo Os arquivos para enviar estao na pasta:
 echo   %CD%\release
 echo.
 echo Recomendado:
-echo   TEACH ELETRICY-Setup-0.2.0-x64.exe
+echo   TEACH ELETRICY-Setup-0.2.1-x64.exe
 echo.
 echo Ou sem instalar:
-echo   TEACH ELETRICY-Portable-0.2.0-x64.exe
+echo   TEACH ELETRICY-Portable-0.2.1-x64.exe
 echo.
 explorer "%CD%\release"
 pause
