@@ -1,6 +1,6 @@
 {
   "name": "teach-eletricy",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Laboratório desktop para ensino de programação PLC Siemens com simulação visual.",
   "main": "electron/main.cjs",
