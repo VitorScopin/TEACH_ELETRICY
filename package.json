@@ -57,12 +57,12 @@
     ],
     "extraResources": [
       {
-        "from": "electron/opc-da-bridge/opc-da-bridge-x64.exe",
-        "to": "opc-da-bridge/opc-da-bridge-x64.exe"
+        "from": "electron/opc-da-bridge/publish/x64",
+        "to": "opc-da-bridge/publish/x64"
       },
       {
-        "from": "electron/opc-da-bridge/opc-da-bridge-x86.exe",
-        "to": "opc-da-bridge/opc-da-bridge-x86.exe"
+        "from": "electron/opc-da-bridge/publish/x86",
+        "to": "opc-da-bridge/publish/x86"
       }
     ],
     "win": {
